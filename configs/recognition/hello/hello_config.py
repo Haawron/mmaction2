@@ -39,8 +39,8 @@ ann_file_test = 'data/epic-kitchens-100/train.txt'
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_bgr=False)
 # clip_len vs. num_clips  https://github.com/open-mmlab/mmaction2/issues/1204
-# clip_len: 한 clip 당 frame 수
-# num_clips: 한 비디오 당 sampling 할 clip 수, defaults to 1
+# clip_len: 한 clip 당 frame 수, defaults to 1
+# num_clips: 한 비디오 당 sampling 할 clip 수
 # 실수한 것
 # 1. 보통 clip_len=1로 놓고 num_clips 수를 조절하나 봄
 #   - 중구난방으로 몇 개 뽑아서 사용하는 것 같음.
@@ -68,7 +68,7 @@ train_pipeline = [
 val_pipeline = [
     dict(
         type='SampleFrames',
-        clip_len=8,
+        clip_len=1,
         frame_interval=1,
         num_clips=8,
         test_mode=True),
@@ -98,7 +98,7 @@ test_pipeline = [
     dict(type='ToTensor', keys=['imgs'])
 ]
 data = dict(
-    videos_per_gpu=4,  # 여기가 batch size임
+    videos_per_gpu=4,  # 여기가 gpu당 batch size임
     workers_per_gpu=4,
     val_dataloader=dict(videos_per_gpu=2),
     train=dict(
