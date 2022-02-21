@@ -26,21 +26,7 @@ class OSBPLoss(BaseWeightedLoss):
         super().__init__()
         self.num_classes = num_classes
         self.target_domain_label = target_domain_label
-
-    def bce(self, pred, label):
-        """
-        Args:
-            pred (N x 2): logits (positive, negative)
-            label (N): soft labels
-
-        Returns:
-            Binary Cross Entropy (scalar)
-        """
-        q = 1. / (1.+torch.exp(pred[:,1]-pred[:,0]))  # N
-        p = label  # N
-        H = - p*torch.log(q) - (1-p)*torch.log(1-q)  # N
-        H = H.mean()  # no dim
-        return H
+        self.loss = torch.nn.CrossEntropyLoss()
         
     def _forward(self, cls_score, label, **kwargs):
         """
@@ -57,7 +43,6 @@ class OSBPLoss(BaseWeightedLoss):
         """
         assert 'domain' in kwargs
         domain = kwargs['domain']
-        print('\n\n\n', domain, label, '\n\n\n')
 
         source_idx = torch.squeeze(domain == 0)
         target_idx = torch.logical_not(source_idx)
@@ -67,21 +52,19 @@ class OSBPLoss(BaseWeightedLoss):
         label[target_idx] = -1
         y = soft_labels[label]
 
-        label = label.unsqueeze(dim=1)
         if source_idx.any():
-            lsm = F.log_softmax(cls_score[source_idx], dim=1)  # N x (K+1)
-            loss_s = -(label[source_idx] * lsm).sum(dim=1)  # N
-            loss_s = loss_s.mean()  # no dim
+            loss_s = self.loss(cls_score[source_idx,:-1], label[source_idx])
         else:
-            loss_s = 0
+            loss_s = torch.tensor(0)
         
         if target_idx.any():
             logit_known, logit_unknown = cls_score[target_idx,:-1], cls_score[target_idx,-1]
             logit_known = logit_known.sum(dim=1)
-            loss_t = self.bce(
+            loss_t = self.loss(
                 torch.cat((logit_known.unsqueeze(1), logit_unknown.unsqueeze(1)), 1),
-                label[target_idx])
+                y[target_idx,:2])
         else:
-            loss_t = 0
+            loss_t = torch.tensor(0)
 
-        return loss_s + loss_t
+        # print(f'{loss_s.item():.7f}\t{loss_t.item():.7f}')
+        return loss_s + .01*loss_t

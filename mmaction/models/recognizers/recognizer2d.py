@@ -236,7 +236,7 @@ class OSBPRecognizer2d(Recognizer2D):
 
         return losses
 
-    def forward(self, imgs, label=None, domain=torch.empty(1), return_loss=True, **kwargs):
+    def forward(self, imgs, label=None, domain=torch.tensor(0), return_loss=True, **kwargs):
         """Define the computation performed at every call."""
         if kwargs.get('gradcam', False):
             del kwargs['gradcam']

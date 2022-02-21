@@ -1,5 +1,5 @@
 # model settings
-num_classes = 97+1
+num_classes = 5+1
 
 
 osbp_loss = dict(
@@ -32,9 +32,10 @@ model = dict(
 # dataset settings
 data_root = 'data/epic-kitchens-100/EPIC-KITCHENS'
 data_root_val = 'data/epic-kitchens-100/EPIC-KITCHENS'
-ann_file_train = 'data/epic-kitchens-100/hello_filelist.txt'
-ann_file_val = 'data/epic-kitchens-100/hello_filelist.txt'
-ann_file_test = 'data/epic-kitchens-100/hello_filelist.txt'
+ann_file_train_source = 'data/epic-kitchens-100/hello_filelist_02.txt'
+ann_file_train_target = 'data/epic-kitchens-100/hello_filelist_22.txt'
+ann_file_val = 'data/epic-kitchens-100/hello_filelist_22.txt'
+ann_file_test = 'data/epic-kitchens-100/hello_filelist_22.txt'
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_bgr=False)
 # clip_len vs. num_clips  https://github.com/open-mmlab/mmaction2/issues/1204
@@ -50,13 +51,13 @@ train_pipeline = [
     dict(type='SampleFrames', clip_len=1, frame_interval=1, num_clips=8),
     dict(type='RawFrameDecode'),
     dict(type='Resize', scale=(-1, 256)),
-    dict(
-        type='MultiScaleCrop',
-        input_size=224,
-        scales=(1, 0.875, 0.66),
-        random_crop=False,
-        max_wh_scale_gap=1,
-        num_fixed_crops=13),
+    # dict(
+    #     type='MultiScaleCrop',
+    #     input_size=224,
+    #     scales=(1, 0.875, 0.66),
+    #     random_crop=False,
+    #     max_wh_scale_gap=1,
+    #     num_fixed_crops=13),
     dict(type='Resize', scale=(224, 224), keep_ratio=False),
     dict(type='Flip', flip_ratio=0.5),
     dict(type='Normalize', **img_norm_cfg),
@@ -98,12 +99,12 @@ test_pipeline = [
 ]
 data = dict(
     videos_per_gpu=4,  # 여기가 gpu당 batch size임
-    workers_per_gpu=1,
+    workers_per_gpu=4,
     val_dataloader=dict(videos_per_gpu=2),
     train=dict(
         type='UDARawframeDataset',
-        source_ann_file=ann_file_train,
-        target_ann_file=ann_file_train,
+        source_ann_file=ann_file_train_source,
+        target_ann_file=ann_file_train_target,
         data_prefix=data_root,
         start_index=1,  # frame number starts with
         filename_tmpl='frame_{:010}.jpg',
@@ -130,12 +131,13 @@ optimizer = dict(
     type='SGD',
     constructor='TSMOptimizerConstructor',
     paramwise_cfg=dict(fc_lr5=True),
-    lr=0.001,  # this lr is used for 8 gpus
+    lr=1e-7,  # this lr is used for 8 gpus
     momentum=0.9,
-    weight_decay=0.0001)
+    weight_decay=0*0.0001)
 optimizer_config = dict(grad_clip=dict(max_norm=20, norm_type=2))
 # learning policy
-lr_config = dict(policy='step', step=[20, 40])
+# lr_config = dict(policy='step', step=[20, 40])
+lr_config = dict(policy='step', step=[100])
 total_epochs = 50
 checkpoint_config = dict(interval=10)
 evaluation = dict(
@@ -146,7 +148,7 @@ log_config = dict(
         dict(type='TextLoggerHook'),
         dict(type='TensorboardLoggerHook'),
     ])
-annealing_runner = True
+annealing_runner = False
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
