@@ -1,5 +1,5 @@
 # model settings
-num_classes = 4+1
+num_classes = 97+1
 
 
 osbp_loss = dict(
@@ -7,7 +7,7 @@ osbp_loss = dict(
     num_classes=num_classes,
     target_domain_label=.5)
 model = dict(
-    type='Recognizer2D',
+    type='OSBPRecognizer2d',
     backbone=dict(
         type='MobileNetV2TSM',
         pretrained=None,#'torchvision://resnet50',
@@ -16,7 +16,7 @@ model = dict(
         norm_eval=False,
         shift_div=8),
     cls_head=dict(
-        type='TSMHead',
+        type='OSBPTSMHead',
         loss_cls=osbp_loss,
         num_classes=num_classes,
         num_segments=8,
@@ -30,12 +30,11 @@ model = dict(
 # train_cfg = None
 # test_cfg = dict(average_clips='evidence', evidence_type='exp')
 # dataset settings
-dataset_type = 'RawframeDataset'
-data_root = 'data/epic-kitchens-100/rawframes'
-data_root_val = 'data/epic-kitchens-100/rawframes'
-ann_file_train = 'data/epic-kitchens-100/train.txt'
-ann_file_val = 'data/epic-kitchens-100/train.txt'
-ann_file_test = 'data/epic-kitchens-100/train.txt'
+data_root = 'data/epic-kitchens-100/EPIC-KITCHENS'
+data_root_val = 'data/epic-kitchens-100/EPIC-KITCHENS'
+ann_file_train = 'data/epic-kitchens-100/hello_filelist.txt'
+ann_file_val = 'data/epic-kitchens-100/hello_filelist.txt'
+ann_file_test = 'data/epic-kitchens-100/hello_filelist.txt'
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_bgr=False)
 # clip_len vs. num_clips  https://github.com/open-mmlab/mmaction2/issues/1204
@@ -62,8 +61,8 @@ train_pipeline = [
     dict(type='Flip', flip_ratio=0.5),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='FormatShape', input_format='NCHW'),
-    dict(type='Collect', keys=['imgs', 'label'], meta_keys=[]),
-    dict(type='ToTensor', keys=['imgs', 'label'])
+    dict(type='Collect', keys=['imgs', 'label', 'domain'], meta_keys=[]),
+    dict(type='ToTensor', keys=['imgs', 'label', 'domain'])
 ]
 val_pipeline = [
     dict(
@@ -99,25 +98,32 @@ test_pipeline = [
 ]
 data = dict(
     videos_per_gpu=4,  # 여기가 gpu당 batch size임
-    workers_per_gpu=4,
+    workers_per_gpu=1,
     val_dataloader=dict(videos_per_gpu=2),
     train=dict(
-        type=dataset_type,
-        ann_file=ann_file_train,
+        type='UDARawframeDataset',
+        source_ann_file=ann_file_train,
+        target_ann_file=ann_file_train,
         data_prefix=data_root,
-        start_index=1,
+        start_index=1,  # frame number starts with
+        filename_tmpl='frame_{:010}.jpg',
+        with_offset=True,
         pipeline=train_pipeline),
     val=dict(
-        type=dataset_type,
+        type='RawframeDataset',
         ann_file=ann_file_val,
         data_prefix=data_root_val,
         start_index=1,
+        filename_tmpl='frame_{:010}.jpg',
+        with_offset=True,
         pipeline=val_pipeline),
     test=dict(
-        type=dataset_type,
+        type='RawframeDataset',
         ann_file=ann_file_test,
         data_prefix=data_root_val,
         start_index=1,
+        filename_tmpl='frame_{:010}.jpg',
+        with_offset=True,
         pipeline=test_pipeline))
 # optimizer
 optimizer = dict(

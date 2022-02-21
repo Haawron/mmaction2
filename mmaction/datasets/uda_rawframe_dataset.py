@@ -1,16 +1,16 @@
 import copy
 import os.path as osp
-​
+
 import numpy as np
 import torch
-​
+
 from .base import BaseDataset
 from .rawframe_dataset import RawframeDataset
-from .registry import DATASETS
-​
-​
+from .builder import DATASETS
+
+
 @DATASETS.register_module()
-class DARawframeDataset(BaseDataset):
+class UDARawframeDataset(RawframeDataset):
     """RawframeDataset for DA. Referenced RawframeDataset"""
     def __init__(self,
                  source_ann_file,
@@ -32,14 +32,16 @@ class DARawframeDataset(BaseDataset):
         self.source_ann_file = source_ann_file
         self.target_ann_file = target_ann_file
         super().__init__(
-            source_ann_file,  # actually not used
-            pipeline,
-            data_prefix,
-            test_mode,
-            multi_class,
-            num_classes,
-            start_index,
-            modality,
+            ann_file=source_ann_file,  # actually not used
+            pipeline=pipeline,
+            data_prefix=data_prefix,
+            test_mode=test_mode,
+            filename_tmpl=filename_tmpl,
+            with_offset=with_offset,
+            multi_class=multi_class,
+            num_classes=num_classes,
+            start_index=start_index,
+            modality=modality,
             sample_by_class=sample_by_class,
             power=power,
             dynamic_length=dynamic_length
@@ -64,7 +66,7 @@ class DARawframeDataset(BaseDataset):
 
     def extract_video_info(self, line: str, domain: str='source'):
         line_split = line.strip().split()
-        video_info = {'domain': domain}
+        video_info = {'domain': 0 if domain=='source' else 1}
         idx = 0
         # idx for frame_dir
         frame_dir = line_split[idx]

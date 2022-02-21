@@ -184,3 +184,89 @@ class Recognizer2D(BaseRecognizer):
         utils."""
         assert self.with_cls_head
         return self._do_test(imgs)
+
+
+@RECOGNIZERS.register_module()
+class OSBPRecognizer2d(Recognizer2D):
+    def __init__(self,
+                 backbone=None,
+                 cls_head=None,
+                 neck=None,
+                 train_cfg=None,
+                 test_cfg=None):
+        super().__init__(backbone, 
+                        cls_head=cls_head,
+                        neck=neck, 
+                        train_cfg=train_cfg, 
+                        test_cfg=test_cfg)
+    
+    def forward_train(self, imgs, labels, domains, **kwargs):
+        assert self.with_cls_head
+        batches = imgs.shape[0]
+        imgs = imgs.reshape((-1, ) + imgs.shape[2:])
+        num_segs = imgs.shape[0] // batches
+
+        losses = dict()
+
+        x = self.extract_feat(imgs)
+
+        if self.backbone_from in ['torchvision', 'timm']:
+            if len(x.shape) == 4 and (x.shape[2] > 1 or x.shape[3] > 1):
+                # apply adaptive avg pooling
+                x = nn.AdaptiveAvgPool2d(1)(x)
+            x = x.reshape((x.shape[0], -1))
+            x = x.reshape(x.shape + (1, 1))
+
+        if self.with_neck:
+            x = [
+                each.reshape((-1, num_segs) +
+                             each.shape[1:]).transpose(1, 2).contiguous()
+                for each in x
+            ]
+            x, loss_aux = self.neck(x, labels.squeeze())
+            x = x.squeeze(2)
+            num_segs = 1
+            losses.update(loss_aux)
+
+        cls_score = self.cls_head(x, num_segs, domains)
+        gt_labels = labels.squeeze()
+        kwargs['domain'] = domains
+        loss_cls = self.cls_head.loss(cls_score, gt_labels, **kwargs)
+        losses.update(loss_cls)
+
+        return losses
+
+    def forward(self, imgs, label=None, domain=torch.empty(1), return_loss=True, **kwargs):
+        """Define the computation performed at every call."""
+        if kwargs.get('gradcam', False):
+            del kwargs['gradcam']
+            return self.forward_gradcam(imgs, **kwargs)
+        if return_loss:
+            if label is None:
+                raise ValueError('Label should not be None.')
+            if self.blending is not None:
+                imgs, label = self.blending(imgs, label)
+            return self.forward_train(imgs, label, domain, **kwargs)
+
+        return self.forward_test(imgs, **kwargs)
+    
+    def train_step(self, data_batch, optimizer, **kwargs):
+        imgs = data_batch['imgs']
+        label = data_batch['label']
+        domain = data_batch['domain']
+
+        aux_info = {}
+        for item in self.aux_info:
+            assert item in data_batch
+            aux_info[item] = data_batch[item]
+
+        losses = self(imgs, label, domain, return_loss=True, **aux_info)
+
+        loss, log_vars = self._parse_losses(losses)
+
+        outputs = dict(
+            loss=loss,
+            log_vars=log_vars,
+            num_samples=len(next(iter(data_batch.values()))))
+
+        return outputs

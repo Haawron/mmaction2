@@ -48,21 +48,26 @@ class OSBPLoss(BaseWeightedLoss):
             cls_score (torch.Tensor, (N x clip_len) x (K + 1)): The K+1-dim class score (before softmax).
             label (torch.Tensor, N): The ground-truth label, hard-labeled(integers).
             kwargs:
+                domain (required): 
                 epoch: The number of epochs during training.
                 total_epoch: The total epoch.
         
         Returns:
             torch.Tensor: Computed loss.
         """
-        y = torch.eye(self.num_classes).to(cls_score.device)
-        y[-1] = self.target_domain_label * torch.ones(self.num_classes)
-        y = y[label]
+        assert 'domain' in kwargs
+        domain = kwargs['domain']
+        print('\n\n\n', domain, label, '\n\n\n')
 
-        target_idx = label == self.num_classes-1
-        source_idx = ~target_idx
+        source_idx = torch.squeeze(domain == 0)
+        target_idx = torch.logical_not(source_idx)
+
+        soft_labels = torch.eye(self.num_classes).to(cls_score.device)
+        soft_labels[-1] = self.target_domain_label * torch.ones(self.num_classes)
+        label[target_idx] = -1
+        y = soft_labels[label]
 
         label = label.unsqueeze(dim=1)
-
         if source_idx.any():
             lsm = F.log_softmax(cls_score[source_idx], dim=1)  # N x (K+1)
             loss_s = -(label[source_idx] * lsm).sum(dim=1)  # N

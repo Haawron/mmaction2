@@ -49,6 +49,7 @@ class ToTensor:
         """
         for key in self.keys:
             results[key] = to_tensor(results[key])
+        print(results['domain'])
         return results
 
     def __repr__(self):

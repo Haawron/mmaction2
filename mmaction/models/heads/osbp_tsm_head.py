@@ -9,17 +9,16 @@ from mmcv.cnn import ConvModule, constant_init, normal_init, xavier_init
 
 
 class GradReverse(Function):
-    def __init__(self, lambd=1.):
-        self.lambd = lambd
-
-    def forward(self, x):
+    @staticmethod
+    def forward(ctx, x, target_idx_mask):
+        ctx.save_for_backward(target_idx_mask)
         return x.view_as(x)
 
-    def backward(self, grad_output):
-        return (grad_output * -self.lambd)
-
-def grad_reverse(x, lambd=1.0):
-    return GradReverse(lambd)(x)
+    @staticmethod
+    def backward(ctx, grad_output):
+        target_idx_mask, = ctx.saved_tensors
+        grad_output[target_idx_mask] *= -1.
+        return grad_output, None
 
 
 @HEADS.register_module()
@@ -47,13 +46,17 @@ class OSBPTSMHead(TSMHead):
             is_shift=is_shift,
             temporal_pool=temporal_pool,
             **kwargs)
-        self.grl = GradReverse()
     
-    def forward(self, x, *, labels):  # avoiding receiving num_segments legacy
+    def forward(self, x, num_segs, domains):
         """
         Args:
-            x ((N x num_clips) x c x h x w)
+            x (N x num_segs, c, h, w)
+        
+        Note:
+            N: batch size
+            num_segs: num_clips
         """
-        target_idx = labels == self.num_classes - 1
-        x[target_idx] = self.grl(x[target_idx])
-        super().forward(x)
+        target_idx_mask = torch.squeeze(domains == 1)
+        target_idx_mask = target_idx_mask.repeat(num_segs)
+        x = GradReverse.apply(x, target_idx_mask)
+        return super().forward(x, num_segs)
