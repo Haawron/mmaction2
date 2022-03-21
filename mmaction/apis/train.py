@@ -13,7 +13,8 @@ from mmcv.runner import (DistSamplerSeedHook, EpochBasedRunner, OptimizerHook,
 from mmcv.runner.hooks import Fp16OptimizerHook
 
 from ..core import (DistEvalHook, EvalHook, OmniSourceDistSamplerSeedHook,
-                    OmniSourceRunner)
+                    OmniSourceRunner, DomainAdaptationDistSamplerSeedHook,
+                    DomainAdaptationRunner)
 from ..datasets import build_dataloader, build_dataset
 from ..utils import PreciseBNHook, get_root_logger
 from .test import multi_gpu_test
@@ -95,7 +96,7 @@ def train_model(model,
     dataloader_setting = dict(dataloader_setting,
                               **cfg.data.get('train_dataloader', {}))
 
-    if cfg.omnisource:
+    if cfg.omnisource or cfg.domain_adaptation:
         # The option can override videos_per_gpu
         train_ratio = cfg.data.get('train_ratio', [1] * len(dataset))
         omni_videos_per_gpu = cfg.data.get('omni_videos_per_gpu', None)
@@ -133,7 +134,11 @@ def train_model(model,
     # build runner
     optimizer = build_optimizer(model, cfg.optimizer)
 
-    Runner = OmniSourceRunner if cfg.omnisource else EpochBasedRunner
+    Runner = (
+        OmniSourceRunner if cfg.omnisource
+        else DomainAdaptationRunner if cfg.domain_adaptation
+        else EpochBasedRunner
+    )
     runner = Runner(
         model,
         optimizer=optimizer,
@@ -160,6 +165,8 @@ def train_model(model,
     if distributed:
         if cfg.omnisource:
             runner.register_hook(OmniSourceDistSamplerSeedHook())
+        elif cfg.domain_adaptation:
+            runner.register_hook(DomainAdaptationDistSamplerSeedHook())
         else:
             runner.register_hook(DistSamplerSeedHook())
 
@@ -202,7 +209,7 @@ def train_model(model,
     elif cfg.load_from:
         runner.load_checkpoint(cfg.load_from)
     runner_kwargs = dict()
-    if cfg.omnisource:
+    if cfg.omnisource or cfg.domain_adaptation:
         runner_kwargs = dict(train_ratio=train_ratio)
     runner.run(data_loaders, cfg.workflow, cfg.total_epochs, **runner_kwargs)
 

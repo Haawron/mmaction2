@@ -22,13 +22,16 @@ class OSBPLoss(BaseWeightedLoss):
     def __init__(
             self,
             num_classes,
-            target_domain_label=.5):
+            target_domain_label=.5,
+            weighting_loss=False,
+        ):
         super().__init__()
         self.num_classes = num_classes
         self.target_domain_label = target_domain_label
+        self.weighting_loss = weighting_loss
         self.loss = torch.nn.CrossEntropyLoss()
         
-    def _forward(self, cls_score, label, **kwargs):
+    def _forward(self, cls_score, label, domains: torch.Tensor, **kwargs):
         """
         Args:
             cls_score (torch.Tensor, (N x clip_len) x (K + 1)): The K+1-dim class score (before softmax).
@@ -41,30 +44,44 @@ class OSBPLoss(BaseWeightedLoss):
         Returns:
             torch.Tensor: Computed loss.
         """
-        assert 'domain' in kwargs
-        domain = kwargs['domain']
+        # assert 'domain' in kwargs
+        # domain = kwargs['domain']
 
-        source_idx = torch.squeeze(domain == 0)
+        # source_idx = torch.squeeze(domain == 0, dim=1)
+        # target_idx = torch.logical_not(source_idx)
+
+        # if source_idx.any():
+        #     loss_s = self.loss(cls_score[source_idx,:-1], label[source_idx])
+        # else:
+        #     loss_s = torch.tensor(0)
+        
+        # if target_idx.any():
+        #     logit_known, logit_unknown = cls_score[target_idx,:-1], cls_score[target_idx,-1]
+        #     logit_known = logit_known.sum(dim=1)
+        #     predicted = torch.cat((logit_known.unsqueeze(1), logit_unknown.unsqueeze(1)), 1)
+        #     soft_label = torch.tensor([[self.target_domain_label, self.target_domain_label]], device='cuda').repeat(target_idx.sum(), 1)
+        #     loss_t = self.loss(predicted, soft_label)
+        # else:
+        #     loss_t = torch.tensor(0)
+
+        # if self.weighting_loss:
+        #     p = source_idx.sum() / (source_idx.sum() + target_idx.sum())
+        # else:
+        #     p = .5
+
+        # return p * loss_s + (1-p) * loss_t
+
+        source_idx = torch.from_numpy(domains == 'source')
         target_idx = torch.logical_not(source_idx)
 
-        soft_labels = torch.eye(self.num_classes).to(cls_score.device)
-        soft_labels[-1] = self.target_domain_label * torch.ones(self.num_classes)
-        label[target_idx] = -1
-        y = soft_labels[label]
+        assert source_idx.sum() == target_idx.sum()
 
-        if source_idx.any():
-            loss_s = self.loss(cls_score[source_idx,:-1], label[source_idx])
-        else:
-            loss_s = torch.tensor(0)
-        
-        if target_idx.any():
-            logit_known, logit_unknown = cls_score[target_idx,:-1], cls_score[target_idx,-1]
-            logit_known = logit_known.sum(dim=1)
-            loss_t = self.loss(
-                torch.cat((logit_known.unsqueeze(1), logit_unknown.unsqueeze(1)), 1),
-                y[target_idx,:2])
-        else:
-            loss_t = torch.tensor(0)
+        loss_s = self.loss(cls_score[source_idx,:-1], label[source_idx])
+        logit_known, logit_unknown = cls_score[target_idx,:-1], cls_score[target_idx,-1]
+        logit_known = logit_known.sum(dim=1)
+        predicted = torch.cat((logit_known.unsqueeze(1), logit_unknown.unsqueeze(1)), 1)
+        soft_label = torch.tensor(
+            [[self.target_domain_label, self.target_domain_label]], device='cuda').repeat(target_idx.sum(), 1)
+        loss_t = self.loss(predicted, soft_label)
 
-        # print(f'{loss_s.item():.7f}\t{loss_t.item():.7f}')
-        return loss_s + .01*loss_t
+        return loss_s + loss_t

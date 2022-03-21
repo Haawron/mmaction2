@@ -129,6 +129,7 @@ def main():
 
     # The flag is used to determine whether it is omnisource training
     cfg.setdefault('omnisource', False)
+    cfg.setdefault('domain_adaptation', False)
 
     # The flag is used to register module's hooks
     cfg.setdefault('module_hooks', [])
@@ -176,7 +177,7 @@ def main():
     if len(cfg.module_hooks) > 0:
         register_module_hooks(model, cfg.module_hooks)
 
-    if cfg.omnisource:
+    if cfg.omnisource or cfg.domain_adaptation:
         # If omnisource flag is set, cfg.data.train should be a list
         assert isinstance(cfg.data.train, list)
         datasets = [build_dataset(dataset) for dataset in cfg.data.train]

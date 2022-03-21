@@ -1,6 +1,7 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import torch
 from torch import nn
+import numpy as np
 
 from ..builder import RECOGNIZERS
 from .base import BaseRecognizer
@@ -44,7 +45,6 @@ class Recognizer2D(BaseRecognizer):
         gt_labels = labels.squeeze()
         loss_cls = self.cls_head.loss(cls_score, gt_labels, **kwargs)
         losses.update(loss_cls)
-
         return losses
 
     def _do_test(self, imgs):
@@ -186,6 +186,92 @@ class Recognizer2D(BaseRecognizer):
         return self._do_test(imgs)
 
 
+# @RECOGNIZERS.register_module()
+# class OSBPRecognizer2d(Recognizer2D):
+#     def __init__(self,
+#                  backbone=None,
+#                  cls_head=None,
+#                  neck=None,
+#                  train_cfg=None,
+#                  test_cfg=None):
+#         super().__init__(backbone, 
+#                         cls_head=cls_head,
+#                         neck=neck, 
+#                         train_cfg=train_cfg, 
+#                         test_cfg=test_cfg)
+    
+#     def forward_train(self, imgs, labels, domains, **kwargs):
+#         assert self.with_cls_head
+#         batches = imgs.shape[0]
+#         imgs = imgs.reshape((-1, ) + imgs.shape[2:])
+#         num_segs = imgs.shape[0] // batches
+
+#         losses = dict()
+        
+#         x = self.extract_feat(imgs)
+
+#         if self.backbone_from in ['torchvision', 'timm']:
+#             if len(x.shape) == 4 and (x.shape[2] > 1 or x.shape[3] > 1):
+#                 # apply adaptive avg pooling
+#                 x = nn.AdaptiveAvgPool2d(1)(x)
+#             x = x.reshape((x.shape[0], -1))
+#             x = x.reshape(x.shape + (1, 1))
+
+#         if self.with_neck:
+#             x = [
+#                 each.reshape((-1, num_segs) +
+#                              each.shape[1:]).transpose(1, 2).contiguous()
+#                 for each in x
+#             ]
+#             x, loss_aux = self.neck(x, labels.squeeze())
+#             x = x.squeeze(2)
+#             num_segs = 1
+#             losses.update(loss_aux)
+
+#         cls_score = self.cls_head(x, num_segs, domains)
+#         gt_labels = labels.squeeze()
+#         kwargs['domain'] = domains
+#         loss_cls = self.cls_head.loss(cls_score, gt_labels, **kwargs)
+#         losses.update(loss_cls)
+
+#         return losses
+
+#     def forward(self, imgs, label=None, domain=torch.tensor(0), return_loss=True, **kwargs):
+#         """Define the computation performed at every call."""
+#         if kwargs.get('gradcam', False):
+#             del kwargs['gradcam']
+#             return self.forward_gradcam(imgs, **kwargs)
+#         if return_loss:
+#             if label is None:
+#                 raise ValueError('Label should not be None.')
+#             if self.blending is not None:
+#                 imgs, label = self.blending(imgs, label)
+#             return self.forward_train(imgs, label, domain, **kwargs)
+
+#         return self.forward_test(imgs, **kwargs)
+    
+#     def train_step(self, data_batch, optimizer, **kwargs):
+#         imgs = data_batch['imgs']
+#         label = data_batch['label']
+#         domain = data_batch['domain']
+
+#         aux_info = {}
+#         for item in self.aux_info:
+#             assert item in data_batch
+#             aux_info[item] = data_batch[item]
+
+#         losses = self(imgs, label, domain, return_loss=True, **aux_info)
+
+#         loss, log_vars = self._parse_losses(losses)
+
+#         outputs = dict(
+#             loss=loss,
+#             log_vars=log_vars,
+#             num_samples=len(next(iter(data_batch.values()))))
+
+#         return outputs
+
+
 @RECOGNIZERS.register_module()
 class OSBPRecognizer2d(Recognizer2D):
     def __init__(self,
@@ -207,7 +293,7 @@ class OSBPRecognizer2d(Recognizer2D):
         num_segs = imgs.shape[0] // batches
 
         losses = dict()
-
+        
         x = self.extract_feat(imgs)
 
         if self.backbone_from in ['torchvision', 'timm']:
@@ -230,13 +316,12 @@ class OSBPRecognizer2d(Recognizer2D):
 
         cls_score = self.cls_head(x, num_segs, domains)
         gt_labels = labels.squeeze()
-        kwargs['domain'] = domains
-        loss_cls = self.cls_head.loss(cls_score, gt_labels, **kwargs)
+        loss_cls = self.cls_head.loss(cls_score, gt_labels, domains, **kwargs)
         losses.update(loss_cls)
 
         return losses
 
-    def forward(self, imgs, label=None, domain=torch.tensor(0), return_loss=True, **kwargs):
+    def forward(self, imgs, label=None, domains=[], return_loss=True, **kwargs):
         """Define the computation performed at every call."""
         if kwargs.get('gradcam', False):
             del kwargs['gradcam']
@@ -246,27 +331,52 @@ class OSBPRecognizer2d(Recognizer2D):
                 raise ValueError('Label should not be None.')
             if self.blending is not None:
                 imgs, label = self.blending(imgs, label)
-            return self.forward_train(imgs, label, domain, **kwargs)
+            return self.forward_train(imgs, label, domains, **kwargs)
 
         return self.forward_test(imgs, **kwargs)
     
-    def train_step(self, data_batch, optimizer, **kwargs):
-        imgs = data_batch['imgs']
-        label = data_batch['label']
-        domain = data_batch['domain']
+    def train_step(self, data_batches, domains, optimizer, **kwargs):
+        imgs = torch.concat([data_batch['imgs'] for data_batch in data_batches])  # data_batch['imgs']이 torch.tensor 맞나?
+        labels = torch.concat([data_batch['label'] for data_batch in data_batches])
+        domains = np.array([
+            [domain]*data_batch['imgs'].shape[0] for domain, data_batch in zip(domains, data_batches)
+        ]).reshape(-1)
+        indices = torch.randperm(imgs.shape[0])  # shuffle the batch
+        imgs = imgs[indices]
+        labels = labels[indices]
+        domains = domains[indices]
 
-        aux_info = {}
-        for item in self.aux_info:
-            assert item in data_batch
-            aux_info[item] = data_batch[item]
-
-        losses = self(imgs, label, domain, return_loss=True, **aux_info)
+        losses = self(imgs, labels, domains, return_loss=True)
 
         loss, log_vars = self._parse_losses(losses)
 
         outputs = dict(
             loss=loss,
             log_vars=log_vars,
-            num_samples=len(next(iter(data_batch.values()))))
+            num_samples=imgs.shape[0])
 
         return outputs
+
+    # def val_step(self, data_batches, domains, optimizer, **kwargs):
+    #     """The iteration step during validation.
+
+    #     This method shares the same signature as :func:`train_step`, but used
+    #     during val epochs. Note that the evaluation after training epochs is
+    #     not implemented with this method, but an evaluation hook.
+    #     """
+    #     imgs = torch.concat([data_batch['imgs'] for data_batch in data_batches])  # data_batch['imgs']이 torch.tensor 맞나?
+    #     labels = torch.concat([data_batch['label'] for data_batch in data_batches])
+    #     domains = torch.tensor([
+    #         [domain]*data_batch['imgs'].shape[0] for domain, data_batch in zip(domains, data_batches)
+    #     ], device='cuda').view(-1)
+
+    #     losses = self(imgs, labels, domains, return_loss=True)
+
+    #     loss, log_vars = self._parse_losses(losses)
+
+    #     outputs = dict(
+    #         loss=loss,
+    #         log_vars=log_vars,
+    #         num_samples=imgs.shape[0])
+
+    #     return outputs
