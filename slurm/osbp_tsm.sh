@@ -34,7 +34,7 @@ python -m torch.distributed.launch --nproc_per_node=4 --master_port=$((10000+$RA
     --cfg-options \
         data.train.0.ann_file=data/epic-kitchens-100/filelist_${source}_train_closed.txt \
         data.train.1.ann_file=data/epic-kitchens-100/filelist_${target}_train_open.txt \
-        data.val.ann_file=data/epic-kitchens-100/filelist_${source}_valid_closed.txt \
+        data.val.ann_file=data/epic-kitchens-100/filelist_${target}_valid_open.txt \
         data.test.ann_file=data/epic-kitchens-100/filelist_${target}_test_open.txt \
         optimizer.lr=$lr \
     --validate \
