@@ -1,12 +1,10 @@
 import torch
-import torch.nn as nn
 from torch.autograd import Function
 import numpy as np
 
 from ..builder import HEADS
 from ...core import top_k_accuracy
 from .tsm_head import TSMHead
-from mmcv.cnn import ConvModule, constant_init, normal_init, xavier_init
 
 
 class GradReverse(Function):
@@ -57,12 +55,6 @@ class OSBPTSMHead(TSMHead):
             N: batch size
             num_segs: num_clips
         """
-        # if domains:  # domains=None for test
-        #     target_idx_mask = torch.squeeze(domains == 1)
-        #     target_idx_mask = target_idx_mask.repeat(num_segs)
-        #     x = GradReverse.apply(x, target_idx_mask)
-        # return super().forward(x, num_segs)
-
         if domains.shape[0] > 0:
             target_idx_mask = torch.squeeze(torch.from_numpy(domains == 'target'))
             target_idx_mask = target_idx_mask.repeat(num_segs)

@@ -29,7 +29,7 @@ echo $lr $source $target
 #     --validate \
 #     --test-best
 
-python -m torch.distributed.launch --nproc_per_node=4 --master_port=$((10000+$RANDOM%20000)) tools/train.py configs/recognition/hello/osbp_tsm_same_batch.py --launcher pytorch \
+python -m torch.distributed.launch --nproc_per_node=4 --master_port=$((10000+$RANDOM%20000)) tools/train.py configs/recognition/hello/osbp/osbp_tsm_ek100.py --launcher pytorch \
     --work-dir work_dirs/${SLURM_ARRAY_JOB_ID}__${SLURM_JOB_NAME}/${SLURM_ARRAY_TASK_ID}/${current_time} \
     --cfg-options \
         data.train.0.ann_file=data/epic-kitchens-100/filelist_${source}_train_closed.txt \

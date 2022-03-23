@@ -5,7 +5,7 @@ num_classes = 5+1  # 1: unknown
 domain_adaptation = True
 
 model = dict(
-    type='OSBPRecognizer2d',
+    type='DARecognizer2d',
     backbone=dict(
         type='ResNetTSM',
         pretrained='torchvision://resnet50',
@@ -14,7 +14,7 @@ model = dict(
         norm_eval=False,
         shift_div=8),
     cls_head=dict(
-        type='OSBPTSMHead',
+        type='DomainAdversarialTSMHead',
         loss_cls=dict(
             type='OSBPLoss',
             num_classes=num_classes,
