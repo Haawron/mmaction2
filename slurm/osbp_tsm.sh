@@ -37,6 +37,7 @@ python -m torch.distributed.launch --nproc_per_node=4 --master_port=$((10000+$RA
         data.val.ann_file=data/epic-kitchens-100/filelist_${target}_valid_open.txt \
         data.test.ann_file=data/epic-kitchens-100/filelist_${target}_test_open.txt \
         optimizer.lr=$lr \
+        cls_head.num_layers=2
     --validate \
     --test-best
 
