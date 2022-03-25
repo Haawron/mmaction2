@@ -9,9 +9,10 @@ from .nll_loss import NLLLoss
 from .ohem_hinge_loss import OHEMHingeLoss
 from .ssn_loss import SSNLoss
 from .osbp_loss import OSBPLoss
+from .dann_loss import DANNLoss
 
 __all__ = [
     'BaseWeightedLoss', 'CrossEntropyLoss', 'NLLLoss', 'BCELossWithLogits',
     'BinaryLogisticRegressionLoss', 'BMNLoss', 'OHEMHingeLoss', 'SSNLoss',
-    'HVULoss', 'CBFocalLoss', 'OSBPLoss'
+    'HVULoss', 'CBFocalLoss', 'OSBPLoss', 'DANNLoss'
 ]

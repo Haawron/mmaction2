@@ -17,10 +17,11 @@ from .tsm_head import TSMHead
 from .tsn_head import TSNHead
 from .x3d_head import X3DHead
 from .osbp_tsm_head import OSBPTSMHead
+from .dann_tsm_head import DANNTSMHead
 
 __all__ = [
     'TSNHead', 'I3DHead', 'BaseHead', 'TSMHead', 'SlowFastHead', 'SSNHead',
     'TPNHead', 'AudioTSNHead', 'X3DHead', 'BBoxHeadAVA', 'AVARoIHead',
     'FBOHead', 'LFBInferHead', 'TRNHead', 'TimeSformerHead', 'ACRNHead',
-    'STGCNHead', 'OSBPTSMHead'
+    'STGCNHead', 'OSBPTSMHead', 'DANNTSMHead'
 ]

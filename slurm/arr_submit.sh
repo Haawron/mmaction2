@@ -1,7 +1,17 @@
 #!/bin/zsh
 
-begin=${1:-'now'}
-echo "begins" $begin
+shfile=${1:-'slurm/dann_tsm_ek100.sh'}
+begin=${2:-'now'}
+
+model=${shfile##*/}
+model=${model%%_*}
+
+if [ -z $shfile ]; then
+    echo 'Specify the shell file.'
+    exit
+fi
+
+echo $shfile "begins" $begin
 
 for source in P02 P04 P22; do
     for target in P02 P04 P22; do
@@ -10,18 +20,18 @@ for source in P02 P04 P22; do
         fi
         if [ -z $jid ]; then  # if $jid is not set
             jid=$(
-                sbatch --job-name=osbp_tsm_${source}_${target} \
+                sbatch --job-name=${model}_tsm_${source}_${target} \
                 --export=ALL,source=$source,target=$target \
                 --begin=$begin \
-                slurm/osbp_tsm.sh | sed 's/[^0-9]*//g'
+                $shfile | sed 's/[^0-9]*//g'
             )
         else
             jid=$(
-                sbatch --job-name=osbp_tsm_${source}_${target} \
+                sbatch --job-name=${model}_tsm_${source}_${target} \
                 --export=ALL,source=$source,target=$target \
                 --dependency=afterany:$jid \
                 --begin=$begin \
-                slurm/osbp_tsm.sh | sed 's/[^0-9]*//g'
+                $shfile | sed 's/[^0-9]*//g'
             )
         fi
         echo $source '-->' $target 'jid:' $jid

@@ -1,5 +1,5 @@
 # model settings
-num_classes = 5+1  # 1: unknown
+num_classes = 5
 
 
 domain_adaptation = True
@@ -14,13 +14,12 @@ model = dict(
         norm_eval=False,
         shift_div=8),
     cls_head=dict(
-        type='DomainAdversarialTSMHead',
+        type='DANNTSMHead',
         loss_cls=dict(
-            type='OSBPLoss',
-            num_classes=num_classes,
-            target_domain_label=.5,
-            weighting_loss=True),
+            type='DANNLoss',
+            num_classes=num_classes),
         num_classes=num_classes,
+        num_layers=2,
         num_segments=8,
         in_channels=2048,
         spatial_type='avg',
