@@ -22,7 +22,7 @@ model = dict(
         dropout_ratio=0.5,
         init_std=0.001,
         is_shift=True),
-    test_cfg=dict(average_clips='prob'))
+    test_cfg=dict(average_clips='score'))
 # model training and testing settings
 # dataset settings
 data_root = '/local_datasets/epic-kitchens-100/EPIC-KITCHENS'
@@ -85,7 +85,7 @@ test_pipeline = [
     dict(type='ToTensor', keys=['imgs'])
 ]
 data = dict(
-    videos_per_gpu=12,  # 여기가 gpu당 batch size임, source+target 한 번에 넣는 거라서 배치 사이즈 반절
+    videos_per_gpu=24,
     workers_per_gpu=2,
     val_dataloader=dict(videos_per_gpu=2),
     train=dict(
@@ -129,7 +129,9 @@ lr_config = dict(
 total_epochs = 50
 checkpoint_config = dict(interval=10)
 evaluation = dict(
-    interval=10, metrics=['top_k_accuracy', 'mean_class_accuracy'])  # valid, test 공용으로 사용
+    interval=10,
+    metrics=['top_k_accuracy', 'mean_class_accuracy', 'confusion_matrix'],  # valid, test 공용으로 사용
+    save_best='mean_class_accuracy')
 log_config = dict(
     interval=10,  # every [ ] steps
     hooks=[
