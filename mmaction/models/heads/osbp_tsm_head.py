@@ -1,12 +1,12 @@
 import torch
 import torch.nn as nn
+from mmcv.cnn import normal_init
 from torch.autograd import Function
 import numpy as np
 
 from ..builder import HEADS
 from ...core import top_k_accuracy
-from .tsm_head import TSMHead
-from mmcv.cnn import ConvModule, constant_init, normal_init, xavier_init
+from .base import AvgConsensus, BaseHead
 
 
 class GradReverse(Function):
@@ -23,10 +23,11 @@ class GradReverse(Function):
 
 
 @HEADS.register_module()
-class OSBPTSMHead(TSMHead):
+class OSBPTSMHead(BaseHead):
     def __init__(self,
             num_classes,
             in_channels,
+            num_layers=1,
             num_segments=8,
             loss_cls=dict(type='CrossEntropyLoss'),
             spatial_type='avg',
@@ -36,19 +37,56 @@ class OSBPTSMHead(TSMHead):
             is_shift=True,
             temporal_pool=False,
             **kwargs):
-        super().__init__(num_classes,
-            in_channels,
-            num_segments=num_segments,
-            loss_cls=loss_cls,
-            spatial_type=spatial_type,
-            consensus=consensus,
-            dropout_ratio=dropout_ratio,
-            init_std=init_std,
-            is_shift=is_shift,
-            temporal_pool=temporal_pool,
-            **kwargs)
+        super().__init__(num_classes, in_channels, loss_cls, **kwargs)
+
+        self.spatial_type = spatial_type
+        self.dropout_ratio = dropout_ratio
+        self.num_layers = num_layers
+        self.num_segments = num_segments
+        self.init_std = init_std
+        self.is_shift = is_shift
+        self.temporal_pool = temporal_pool
+
+        consensus_ = consensus.copy()
+
+        consensus_type = consensus_.pop('type')
+        if consensus_type == 'AvgConsensus':
+            self.consensus = AvgConsensus(**consensus_)
+        else:
+            self.consensus = None
+
+        if self.dropout_ratio != 0:
+            self.dropouts = [
+                nn.Dropout(p=self.dropout_ratio)
+                for _ in range(self.num_layers)
+            ]
+        else:
+            self.dropouts = None
+        self.fcs = [
+            nn.Linear(self.in_channels//2**i, self.in_channels//2**(i+1))
+            for i in range(self.num_layers-1)
+        ] + [nn.Linear(self.in_channels//2**(self.num_layers-1), self.num_classes)]
+        
+        self.fc_block = []
+        for i in range(self.num_layers):
+            self.fc_block.append(self.dropouts[i])
+            self.fc_block.append(self.fcs[i])
+            if i != self.num_layers - 1:
+                self.fc_block.append(nn.ReLU())
+        self.fc_block = nn.Sequential(*self.fc_block)
+
+        if self.spatial_type == 'avg':
+            # use `nn.AdaptiveAvgPool2d` to adaptively match the in_channels.
+            self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        else:
+            self.avg_pool = None
+
+    def init_weights(self):
+        """Initiate the parameters from scratch."""
+        for self.fc in self.fcs:
+            normal_init(self.fc, std=self.init_std)
     
-    def forward(self, x, num_segs, domains=np.array([])):
+    def forward(self, x, num_segs, domains=None):
         """
         Args:
             x (N x num_segs, c, h, w)
@@ -57,17 +95,31 @@ class OSBPTSMHead(TSMHead):
             N: batch size
             num_segs: num_clips
         """
-        # if domains:  # domains=None for test
-        #     target_idx_mask = torch.squeeze(domains == 1)
-        #     target_idx_mask = target_idx_mask.repeat(num_segs)
-        #     x = GradReverse.apply(x, target_idx_mask)
-        # return super().forward(x, num_segs)
-
         if domains.shape[0] > 0:
             target_idx_mask = torch.squeeze(torch.from_numpy(domains == 'target'))
             target_idx_mask = target_idx_mask.repeat(num_segs)
             x = GradReverse.apply(x, target_idx_mask)
-        return super().forward(x, num_segs)
+
+        # [N * num_segs, in_channels, 7, 7]
+        if self.avg_pool is not None:
+            x = self.avg_pool(x)
+        # [N * num_segs, in_channels, 1, 1]
+        x = torch.flatten(x, 1)
+        # [N * num_segs, in_channels]
+        cls_score = self.fc_block(x)
+        # [N * num_segs, num_classes]
+        if self.is_shift and self.temporal_pool:
+            # [2 * N, num_segs // 2, num_classes]
+            cls_score = cls_score.view((-1, self.num_segments // 2) +
+                                       cls_score.size()[1:])
+        else:
+            # [N, num_segs, num_classes]
+            cls_score = cls_score.view((-1, self.num_segments) +
+                                       cls_score.size()[1:])
+        # [N, 1, num_classes]
+        cls_score = self.consensus(cls_score)
+        # [N, num_classes]
+        return cls_score.squeeze(1)
 
     def loss(self, cls_score, labels, domains, **kwargs):
         losses = dict()

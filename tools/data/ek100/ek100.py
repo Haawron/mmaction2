@@ -19,7 +19,8 @@ def writerow(writer, video_info):
 
 max_count = inf
 participants = ['P22', 'P02', 'P04']
-missed = ['P22_10', 'P02_103', 'P04_06', 'P04_30']
+# missed = ['P22_10', 'P02_103', 'P04_06', 'P04_30']
+missed = ['P04_30']
 split_names = ['train', 'valid', 'test']
 labelset_names = ['open', 'closed']
 weights = [.7, .2, .1]

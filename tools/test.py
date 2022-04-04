@@ -3,6 +3,8 @@ import argparse
 import os
 import os.path as osp
 import warnings
+from pathlib import Path
+import csv
 
 import mmcv
 import torch
@@ -37,6 +39,11 @@ def parse_args():
         '--out',
         default=None,
         help='output result file in pkl/yaml/json format')
+    parser.add_argument(
+        '--save-eval',
+        type=bool,
+        default=True,
+        help='Whether to save the evaluated values along with outfile.')
     parser.add_argument(
         '--fuse-conv-bn',
         action='store_true',
@@ -360,9 +367,14 @@ def main():
             dataset.dump_results(outputs, **output_config)
         if eval_config:
             eval_res = dataset.evaluate(outputs, **eval_config)
+            if args.save_eval:
+                with Path(args.out).with_suffix('.csv').open('w') as f:
+                    writer = csv.writer(f)
+                    names, vals = zip(*eval_res.items())
+                    writer.writerow(names)
+                    writer.writerow(vals)
             for name, val in eval_res.items():
                 print(f'{name}: {val:.04f}')
-
 
 if __name__ == '__main__':
     main()

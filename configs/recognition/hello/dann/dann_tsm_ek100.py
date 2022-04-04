@@ -1,11 +1,11 @@
 # model settings
-num_classes = 5+1  # 1: unknown
+num_classes = 5
 
 
 domain_adaptation = True
 
 model = dict(
-    type='OSBPRecognizer2d',
+    type='DARecognizer2d',
     backbone=dict(
         type='ResNetTSM',
         pretrained='torchvision://resnet50',
@@ -14,13 +14,16 @@ model = dict(
         norm_eval=False,
         shift_div=8),
     cls_head=dict(
-        type='OSBPTSMHead',
+        type='DANNTSMHead',
         loss_cls=dict(
-            type='OSBPLoss',
-            num_classes=num_classes,
-            target_domain_label=.5,
-            weighting_loss=True),
+            type='DANNClassifierLoss',
+            num_classes=num_classes),
+        loss_domain=dict(
+            type='DANNDomainLoss',
+            loss_weight=.5),
         num_classes=num_classes,
+        num_cls_layers=1,
+        num_domain_layers=4,
         num_segments=8,
         in_channels=2048,
         spatial_type='avg',
@@ -148,7 +151,9 @@ lr_config = dict(
 total_epochs = 50
 checkpoint_config = dict(interval=10)
 evaluation = dict(
-    interval=10, metrics=['top_k_accuracy', 'mean_class_accuracy'])  # valid, test 공용으로 사용
+    interval=10,
+    metrics=['top_k_accuracy', 'mean_class_accuracy', 'confusion_matrix'],  # valid, test 공용으로 사용
+    save_best='mean_class_accuracy')
 log_config = dict(
     interval=10,  # every [ ] steps
     hooks=[
