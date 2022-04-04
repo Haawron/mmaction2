@@ -61,7 +61,7 @@ class DomainAdaptationRunner(EpochBasedRunner):
         time.sleep(2)  # Prevent possible deadlock during epoch transition
         # the number of iterations is fit to the main loader
         for i, data_batches in enumerate(zip(*(self.data_loaders[:1]+self.aux_iters))):
-            main_batch_length = data_batches[0]['imgs'].shape[0]
+            main_batch_length = min(data_batches[0]['imgs'].shape[0], data_batches[1]['imgs'].shape[0])
             for idx_data_batch in range(len(data_batches)):  # when drop_last=False, main_loader's batch size may differ
                 data_batches[idx_data_batch]['imgs']  = data_batches[idx_data_batch]['imgs'][:main_batch_length]
                 data_batches[idx_data_batch]['label'] = data_batches[idx_data_batch]['label'][:main_batch_length]
