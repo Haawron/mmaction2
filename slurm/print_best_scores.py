@@ -29,9 +29,9 @@ def main():
     parser.add_argument('-j', '--jids', default=None, nargs='+',
                         help='The main job ids of the task')
 
-    parser.add_argument('-d', '--dataset', default=None,
+    parser.add_argument('-d', '--dataset', default='ek100',
                         help='')
-    parser.add_argument('-b', '--backbone', default=None,
+    parser.add_argument('-b', '--backbone', default='tsm',
                         help='')
     parser.add_argument('-m', '--model', default=None,
                         help='')
@@ -89,16 +89,18 @@ def print_df_from_config_vars(dataset, backbone, model, domain=None, task=None, 
             sort_by = ['Domain', 'Task', select_model_by.upper()]
             ascending = [True, True, False]
             columns = ['ACC', 'MCA', 'JID'] if select_model_by == 'acc' else ['MCA', 'ACC', 'JID']
+            key = None
         else:
             indices = ['Dataset', 'Backbone', 'Model', 'Task']
             sort_by = ['Task', select_model_by.upper()]
             ascending = [True, False]
             columns = ['ACC', 'MCA', 'JID'] if select_model_by == 'acc' else ['MCA', 'ACC', 'JID']
+            key = lambda column: column.map(lambda value: ''.join(value.split('_')[::-1])) if column.name == 'Task' else column  # if task, sort by its target domain
         print(
             df
             .reset_index()
             .set_index(indices)
-            .sort_values(by=sort_by, ascending=ascending)[columns]
+            .sort_values(by=sort_by, ascending=ascending, key=key)[columns]
         )
 
 def print_info_from_jid_for_test(jid):

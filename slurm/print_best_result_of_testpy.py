@@ -41,12 +41,13 @@ with pd.option_context('display.float_format', '{:.1f}'.format):
         mask = df['domain'] == df['tested_on']
         df_same = df.loc[mask, :]
         df_diff = df.loc[~mask, :]
-        rearrange = lambda df: df.sort_values(by=['task', 'domain', 'tested_on']).set_index(['task', 'domain', 'tested_on', 'openness']).unstack(level=[1, 2, 3])['top1_acc']
+        rearrange = lambda df: df.sort_values(by=['task', 'tested_on']).set_index(['task', 'domain', 'tested_on', 'openness']).unstack(level=[1, 2, 3])['mean_class_accuracy']
         print(rearrange(df_same))
         print()
         print(rearrange(df_diff))
     else:
-        rearrange = lambda df: df.sort_values(by=['task']).set_index(['model', 'task', 'openness']).unstack(level=[1, 2])[['top1_acc']]
+        key = lambda column: column.map(lambda value: ''.join(value.split('_')[::-1])) if column.name == 'Task' else column
+        rearrange = lambda df: df.sort_values(by=['task'], key=key).set_index(['model', 'task', 'openness']).unstack(level=[1, 2])[['mean_class_accuracy']]
         print(rearrange(df))
 
 # todos:
