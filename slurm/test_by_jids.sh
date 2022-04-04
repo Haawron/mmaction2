@@ -1,43 +1,48 @@
 #!/bin/bash
 
-# 예시) . slurm/test_single.sh 15588
-
 conda activate open-mmlab
 
-jid=$1
-config=${2:-'configs/recognition/hello/osbp/osbp_tsm_same_batch.py'}
-openness=${3:-'closed'}
-dataset=${dataset:-'ek100'}
-
-model=${config##*/}
-model=${model%%_*}
-
-if [ -z $jid ]; then
+if [ -z $1 ]; then
     echo 'No jid is passed'
 else
-    echo "Testing the best model of jid:$jid on [$openness] set"
-    output=$(python slurm/find_best.py -j ${jid})
+    OMP_NUM_THREADS=2
+    MKL_NUM_THREADS=2
+    for jid in "$@"; do
+        output=$(python slurm/print_best_scores.py -j ${jid} -o)
+        if [ $? -eq 0 ]; then
+            read dataset backbone model task acc mca jid ckpt config <<< $output
+            echo -e "\n====================================================================\n"
+            echo "Testing the best model of [jid $jid]"
+            echo 
+            echo -e "Dataset:\t$dataset"
+            echo -e "Backbone:\t$backbone"
+            echo -e "Model:\t\t$model"
+            echo -e "Task:\t\t$task"
+            echo -e "Test ACC:\t$acc"
+            echo -e "Checkpoint:\t$ckpt"
+            echo -e "Config:\t\t$config\n"
 
-    if [ $? -eq 0 ]; then
-        read checkpoint src tgt <<< $output
+            target=${task#*_}
+            echo -e "Target: ${target}\n"
 
-        echo "Checkpoint: $checkpoint"
-        echo "Model: $model"
-        echo "source: $src, target: $tgt"
-        outdir="work_dirs/test_output/${dataset}/${model}/${openness}/${src}_${tgt}/${jid}"
-        outfile="${outdir}/${jid}.json"
-        annfile="data.test.ann_file=data/epic-kitchens-100/filelist_${tgt}_test_${openness}.txt"
-        echo "Outfile: $outfile"
+            for openness in open closed; do
+                outfile="work_dirs/test_output/${dataset}/${backbone}/${model}/${task}/${openness}/${jid}.json"
+                annfile="data/epic-kitchens-100/filelist_${target}_test_${openness}.txt"
 
-        python tools/test.py $config \
-            $checkpoint \
-            --out $outfile \
-            --eval top_k_accuracy mean_class_accuracy \
-            --cfg-options $annfile \
-
-    else
-        echo "Invalid jid $jid or something's wrong with the training result."
-    fi
+                python tools/test.py $config \
+                    $ckpt \
+                    --out $outfile \
+                    --eval top_k_accuracy mean_class_accuracy confusion_matrix \
+                    --average-clips score \
+                    --cfg-options \
+                        data.test.ann_file=$annfile
+                if [ $? -ne 0 ]; then
+                    break
+                fi
+            done
+        else
+            echo "Invalid jid $jid or something's wrong with the training result."
+        fi
+    echo -e "\n====================================================================\n"
+    done
 fi
-
-echo -e "\n\n\n"
