@@ -23,13 +23,14 @@ class OSBPLoss(BaseWeightedLoss):
             self,
             num_classes,
             target_domain_label=.5,
-            weighting_loss=False,
+            weight_loss=2.,
         ):
         super().__init__()
         self.num_classes = num_classes
         self.target_domain_label = target_domain_label
         self.weighting_loss = weighting_loss
         self.loss = torch.nn.CrossEntropyLoss()
+        self.weight_loss = weight_loss
         
     def _forward(self, cls_score, label, domains: torch.Tensor, **kwargs):
         """
@@ -84,4 +85,5 @@ class OSBPLoss(BaseWeightedLoss):
             [[self.target_domain_label, self.target_domain_label]], device='cuda').repeat(target_idx.sum(), 1)
         loss_t = self.loss(predicted, soft_label)
 
-        return loss_s + loss_t
+        # return loss_s + loss_t
+        return {'loss_cls': loss_s, 'loss_target': self.weight_loss * loss_t}

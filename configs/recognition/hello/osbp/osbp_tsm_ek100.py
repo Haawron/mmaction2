@@ -18,8 +18,7 @@ model = dict(
         loss_cls=dict(
             type='OSBPLoss',
             num_classes=num_classes,
-            target_domain_label=.5,
-            weighting_loss=True),
+            target_domain_label=.5),
         num_classes=num_classes,
         in_channels=2048,
         num_layers=1,
@@ -149,7 +148,9 @@ lr_config = dict(
 total_epochs = 50
 checkpoint_config = dict(interval=10)
 evaluation = dict(
-    interval=10, metrics=['top_k_accuracy', 'mean_class_accuracy'])  # valid, test 공용으로 사용
+    interval=10,
+    metrics=['top_k_accuracy', 'mean_class_accuracy', 'confusion_matrix'],  # valid, test 공용으로 사용
+    save_best='mean_class_accuracy')
 log_config = dict(
     interval=10,  # every [ ] steps
     hooks=[
