@@ -235,7 +235,17 @@ class DARecognizer2d(Recognizer2D):
 
         return losses
 
-    def forward(self, imgs, label=None, domains=[], return_loss=True, **kwargs):
+    def forward_test(self, imgs, domains):
+        """Defines the computation performed at every call when evaluation and
+        testing."""
+        if self.test_cfg.get('fcn_test', False):
+            # If specified, spatially fully-convolutional testing is performed
+            assert not self.feature_extraction
+            assert self.with_cls_head
+            return self._do_fcn_test(imgs).cpu().numpy()  # todo: Add `domains`
+        return self._do_test(imgs, domains).cpu().numpy()
+
+    def forward(self, imgs, label=None, domains=None, return_loss=True, **kwargs):
         """Define the computation performed at every call."""
         if kwargs.get('gradcam', False):
             del kwargs['gradcam']
@@ -247,10 +257,10 @@ class DARecognizer2d(Recognizer2D):
                 imgs, label = self.blending(imgs, label)
             return self.forward_train(imgs, label, domains, **kwargs)
 
-        return self.forward_test(imgs, **kwargs)
+        return self.forward_test(imgs, domains, **kwargs)
     
     def train_step(self, data_batches, domains, optimizer, **kwargs):
-        imgs = torch.concat([data_batch['imgs'] for data_batch in data_batches])  # data_batch['imgs']이 torch.tensor 맞나?
+        imgs = torch.concat([data_batch['imgs'] for data_batch in data_batches])
         labels = torch.concat([data_batch['label'] for data_batch in data_batches])
         domains = np.array([
             [domain]*data_batch['imgs'].shape[0] for domain, data_batch in zip(domains, data_batches)
@@ -270,27 +280,56 @@ class DARecognizer2d(Recognizer2D):
             num_samples=imgs.shape[0])
 
         return outputs
+        
+    def _do_test(self, imgs, domains):
+        """Defines the computation performed at every call when evaluation,
+        testing and gradcam."""
+        batches = imgs.shape[0]
+        imgs = imgs.reshape((-1, ) + imgs.shape[2:])
+        num_segs = imgs.shape[0] // batches
 
-    # def val_step(self, data_batches, domains, optimizer, **kwargs):
-    #     """The iteration step during validation.
+        x = self.extract_feat(imgs)
 
-    #     This method shares the same signature as :func:`train_step`, but used
-    #     during val epochs. Note that the evaluation after training epochs is
-    #     not implemented with this method, but an evaluation hook.
-    #     """
-    #     imgs = torch.concat([data_batch['imgs'] for data_batch in data_batches])  # data_batch['imgs']이 torch.tensor 맞나?
-    #     labels = torch.concat([data_batch['label'] for data_batch in data_batches])
-    #     domains = torch.tensor([
-    #         [domain]*data_batch['imgs'].shape[0] for domain, data_batch in zip(domains, data_batches)
-    #     ], device='cuda').view(-1)
+        if self.backbone_from in ['torchvision', 'timm']:
+            if len(x.shape) == 4 and (x.shape[2] > 1 or x.shape[3] > 1):
+                # apply adaptive avg pooling
+                x = nn.AdaptiveAvgPool2d(1)(x)
+            x = x.reshape((x.shape[0], -1))
+            x = x.reshape(x.shape + (1, 1))
 
-    #     losses = self(imgs, labels, domains, return_loss=True)
+        if self.with_neck:
+            x = [
+                each.reshape((-1, num_segs) +
+                             each.shape[1:]).transpose(1, 2).contiguous()
+                for each in x
+            ]
+            x, _ = self.neck(x)
+            x = x.squeeze(2)
+            num_segs = 1
 
-    #     loss, log_vars = self._parse_losses(losses)
+        if self.feature_extraction:
+            # perform spatial pooling
+            avg_pool = nn.AdaptiveAvgPool2d(1)
+            x = avg_pool(x)
+            # squeeze dimensions
+            x = x.reshape((batches, num_segs, -1))
+            # temporal average pooling
+            x = x.mean(axis=1)
+            return x
 
-    #     outputs = dict(
-    #         loss=loss,
-    #         log_vars=log_vars,
-    #         num_samples=imgs.shape[0])
+        # When using `TSNHead` or `TPNHead`, shape is [batch_size, num_classes]
+        # When using `TSMHead`, shape is [batch_size * num_crops, num_classes]
+        # `num_crops` is calculated by:
+        #   1) `twice_sample` in `SampleFrames`
+        #   2) `num_sample_positions` in `DenseSampleFrames`
+        #   3) `ThreeCrop/TenCrop` in `test_pipeline`
+        #   4) `num_clips` in `SampleFrames` or its subclass if `clip_len != 1`
 
-    #     return outputs
+        # should have cls_head if not extracting features
+        cls_score = self.cls_head(x, num_segs, domains)[0]
+
+        assert cls_score.size()[0] % batches == 0
+        # calculate num_crops automatically
+        cls_score = self.average_clip(cls_score,
+                                      cls_score.size()[0] // batches)
+        return cls_score

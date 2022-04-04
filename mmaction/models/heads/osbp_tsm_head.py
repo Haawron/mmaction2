@@ -86,7 +86,7 @@ class OSBPTSMHead(BaseHead):
         for self.fc in self.fcs:
             normal_init(self.fc, std=self.init_std)
     
-    def forward(self, x, num_segs, domains=np.array([])):
+    def forward(self, x, num_segs, domains=None):
         """
         Args:
             x (N x num_segs, c, h, w)

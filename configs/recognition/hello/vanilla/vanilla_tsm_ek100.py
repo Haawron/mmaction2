@@ -1,11 +1,10 @@
 # model settings
 num_classes = 5
 
-
-domain_adaptation = True
+domain_adaptation = False
 
 model = dict(
-    type='DARecognizer2d',
+    type='Recognizer2D',
     backbone=dict(
         type='ResNetTSM',
         pretrained='torchvision://resnet50',
@@ -14,16 +13,8 @@ model = dict(
         norm_eval=False,
         shift_div=8),
     cls_head=dict(
-        type='DANNTSMHead',
-        loss_cls=dict(
-            type='DANNClassifierLoss',
-            num_classes=num_classes),
-        loss_domain=dict(
-            type='DANNDomainLoss',
-            loss_weight=.5),
+        type='TSMHead',
         num_classes=num_classes,
-        num_cls_layers=1,
-        num_domain_layers=4,
         num_segments=8,
         in_channels=2048,
         spatial_type='avg',
@@ -31,17 +22,14 @@ model = dict(
         dropout_ratio=0.5,
         init_std=0.001,
         is_shift=True),
-    test_cfg=dict(average_clips='prob'))
+    test_cfg=dict(average_clips='score'))
 # model training and testing settings
 # dataset settings
 data_root = '/local_datasets/epic-kitchens-100/EPIC-KITCHENS'
 data_root_val = '/local_datasets/epic-kitchens-100/EPIC-KITCHENS'
-ann_file_train_source = 'data/epic-kitchens-100/filelist_P02_train_closed.txt'
-ann_file_train_target = 'data/epic-kitchens-100/filelist_P22_train_open.txt'
-ann_file_valid_source = 'data/epic-kitchens-100/filelist_P02_test_closed.txt'  # valid는 그냥 test로 하는 수밖에 없음
-ann_file_valid_target = 'data/epic-kitchens-100/filelist_P22_test_closed.txt'  # 실제론 training 중에 target accuracy를 얻을 수 없으니 빈 파일로 두는 게 맞음
-ann_file_test_source = 'data/epic-kitchens-100/empty.txt'  # open-set detection accuracy 잴 때만 사용
-ann_file_test_target = 'data/epic-kitchens-100/filelist_P22_test_open.txt'  # 실제 accuracy + open-set detection
+ann_file_train = 'data/epic-kitchens-100/filelist_P02_train_closed.txt'
+ann_file_valid = 'data/epic-kitchens-100/filelist_P02_valid_closed.txt'
+ann_file_test  = 'data/epic-kitchens-100/filelist_P02_test_open.txt'  # closed test는 스크립트에서
 # img_norm_cfg = dict(
 #     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_bgr=False)
 img_norm_cfg = dict(
@@ -97,30 +85,20 @@ test_pipeline = [
     dict(type='ToTensor', keys=['imgs'])
 ]
 data = dict(
-    videos_per_gpu=12,  # 여기가 gpu당 batch size임, source+target 한 번에 넣는 거라서 배치 사이즈 반절
+    videos_per_gpu=24,
     workers_per_gpu=2,
     val_dataloader=dict(videos_per_gpu=2),
-    train=[
-        dict(
-            type='RawframeDataset',
-            ann_file=ann_file_train_source,
-            data_prefix=data_root,
-            start_index=1,  # frame number starts with
-            filename_tmpl='frame_{:010}.jpg',
-            with_offset=True,
-            pipeline=train_pipeline),
-        dict(
-            type='RawframeDataset',
-            ann_file=ann_file_train_target,
-            data_prefix=data_root,
-            start_index=1,
-            filename_tmpl='frame_{:010}.jpg',
-            with_offset=True,
-            pipeline=train_pipeline),
-    ],
+    train=dict(
+        type='RawframeDataset',
+        ann_file=ann_file_train,
+        data_prefix=data_root,
+        start_index=1,  # frame number starts with
+        filename_tmpl='frame_{:010}.jpg',
+        with_offset=True,
+        pipeline=train_pipeline),
     val=dict(
         type='RawframeDataset',
-        ann_file=ann_file_valid_target,
+        ann_file=ann_file_valid,
         data_prefix=data_root,
         start_index=1,
         filename_tmpl='frame_{:010}.jpg',
@@ -128,7 +106,7 @@ data = dict(
         pipeline=val_pipeline),
     test=dict(
         type='RawframeDataset',
-        ann_file=ann_file_test_target,
+        ann_file=ann_file_test,
         data_prefix=data_root,
         start_index=1,
         filename_tmpl='frame_{:010}.jpg',
@@ -164,7 +142,7 @@ annealing_runner = False
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = './work_dirs/OSBP_02_to_22'
+work_dir = './work_dirs/vanilla_02_to_22'
 load_from = 'https://download.openmmlab.com/mmaction/recognition/tsm/tsm_r50_256p_1x1x8_50e_kinetics400_rgb/tsm_r50_256p_1x1x8_50e_kinetics400_rgb_20200726-020785e2.pth'
 resume_from = None
 workflow = [('train', 1)]
