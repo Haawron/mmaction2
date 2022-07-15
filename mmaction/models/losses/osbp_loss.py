@@ -29,8 +29,14 @@ class OSBPLoss(BaseWeightedLoss):
         super().__init__()
         self.num_classes = num_classes
         self.target_domain_label = target_domain_label
-        self.loss = torch.nn.CrossEntropyLoss()
+        self.loss_cls = torch.nn.CrossEntropyLoss()
+        self.bce = torch.nn.BCELoss()
         self.weight_loss = weight_loss
+        
+    def loss_adv(self, logits, t):
+        p = F.softmax(logits, dim=1)[:,-1]  # being unknown
+        t = t * torch.ones_like(p)  # expand
+        return self.bce(p, t)
         
     def _forward(self, cls_score, label, domains=None, **kwargs):
         """
@@ -47,16 +53,12 @@ class OSBPLoss(BaseWeightedLoss):
 
         source_idx = torch.from_numpy(domains == 'source')
         target_idx = torch.logical_not(source_idx)
-
         assert source_idx.sum() == target_idx.sum()
-
-        loss_s = self.loss(cls_score[source_idx,:-1], label[source_idx])
-        logit_known, logit_unknown = cls_score[target_idx,:-1], cls_score[target_idx,-1]
-        logit_known = logit_known.sum(dim=1)
-        predicted = torch.cat((logit_known.unsqueeze(1), logit_unknown.unsqueeze(1)), 1)
-        soft_label = torch.tensor(
-            [[self.target_domain_label, self.target_domain_label]], device='cuda').repeat(target_idx.sum(), 1)
-        loss_t = self.loss(predicted, soft_label)
+        logits_source = cls_score[source_idx]
+        logits_target = cls_score[target_idx]
+        labels_source = label[source_idx]
+        loss_s = self.loss_cls(logits_source[:,:-1], labels_source)
+        loss_t = self.loss_adv(logits_target, self.target_domain_label)
 
         # return loss_s + loss_t
         return {'loss_cls': loss_s, 'loss_target': self.weight_loss * loss_t}

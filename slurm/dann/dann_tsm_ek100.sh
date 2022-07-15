@@ -21,7 +21,7 @@ echo $lr $source
 
 # get source-only best ckpt to init the model
 output=$(python slurm/print_best_scores.py -d ek100 -b tsm -m vanilla -dom ${source} -t source-only -o)
-read _dataset _backbone _model _domain _task _acc _mca _jid ckpt _config <<< $output
+read _dataset _backbone _model _domain _task _acc _mca _unk _jid ckpt _config <<< $output
 
 python -m torch.distributed.launch --nproc_per_node=4 --master_port=$((10000+$RANDOM%20000)) tools/train.py configs/recognition/hello/dann/dann_tsm_ek100.py --launcher pytorch \
     --work-dir work_dirs/train_output/ek100/tsm/dann/${task}/${SLURM_ARRAY_JOB_ID}__${SLURM_JOB_NAME}/${SLURM_ARRAY_TASK_ID}/${current_time} \
@@ -33,7 +33,8 @@ python -m torch.distributed.launch --nproc_per_node=4 --master_port=$((10000+$RA
         optimizer.lr=$lr \
         model.cls_head.num_cls_layers=1 \
         model.cls_head.num_domain_layers=4 \
-        model.cls_head.loss_domain.loss_weight=1.5 \
+        model.cls_head.loss_domain.loss_weight=3 \
+	    data.train.0.sample_by_class=True \
         load_from=$ckpt \
     --validate \
     --test-best --test-last

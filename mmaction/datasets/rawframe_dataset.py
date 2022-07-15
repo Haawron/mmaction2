@@ -1,8 +1,11 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import copy
+from math import factorial
 import os.path as osp
 
+import numpy as np
 import torch
+from itertools import permutations
 
 from .base import BaseDataset
 from .builder import DATASETS
@@ -182,3 +185,70 @@ class RawframeDataset(BaseDataset):
             results['label'] = onehot
 
         return self.pipeline(results)
+
+
+@DATASETS.register_module()
+class COPRawframeDataset(RawframeDataset):
+    def __init__(self,
+                 ann_file,
+                 pipeline,
+                 num_clips=3, 
+                 data_prefix=None,
+                 test_mode=False,
+                 filename_tmpl='img_{:05}.jpg',
+                 with_offset=False,
+                 multi_class=False,
+                 num_classes=None,
+                 start_index=1,
+                 modality='RGB',
+                 sample_by_class=False,
+                 power=0.,
+                 dynamic_length=False):
+        self.num_clips = num_clips
+        super().__init__(
+            ann_file,
+            pipeline,
+            data_prefix,
+            test_mode,
+            filename_tmpl,
+            with_offset,
+            multi_class,
+            num_classes,
+            start_index,
+            modality,
+            sample_by_class=sample_by_class,
+            power=power,
+            dynamic_length=dynamic_length)
+    
+    def prepare_train_frames(self, idx):
+        results = super().prepare_train_frames(idx)
+        return self._shuffle_and_relabel(results)
+
+    def prepare_test_frames(self, idx):
+        results = super().prepare_test_frames(idx)
+        return self._shuffle_and_relabel(results)
+
+    def _shuffle_and_relabel(self, results:dict):
+        label = np.random.randint(factorial(self.num_clips))
+        # label = np.random.choice([0, 2], replace=False)
+        clip_order = np.array(list(permutations(range(self.num_clips))))[label]
+        x = results['imgs']  # [num_clips*clip_len, C, H, W]
+        x = x.reshape(self.num_clips, -1, *x.shape[-3:])  # [num_clips, clip_len, C, H, W]
+        x = x[clip_order]  # [num_clips, clip_len, C, H, W]
+        x = x.reshape(-1, *x.shape[-3:])  # [num_clips*clip_len, C, H, W]
+
+        # from PIL import Image
+        # import os
+        # os.makedirs(f'tmp/{os.getpid()}_{"".join(map(str, clip_order))}', exist_ok=True)
+        # x -= x.min()
+        # x /= x.max()
+        # x *= 255
+        # for i, img in enumerate(x.permute(0, 2, 3, 1).detach().cpu().numpy()):
+        #     img = Image.fromarray(img.astype(np.uint8))
+        #     img.save(f'tmp/{os.getpid()}_{"".join(map(str, clip_order))}/{i:02d}.png')
+        # print(clip_order)
+        # exit()
+
+        results['imgs'] = x
+        results['label'] = label
+        return results

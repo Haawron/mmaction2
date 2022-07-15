@@ -18,14 +18,14 @@ else
             fi
             if [ -z $jid ]; then  # if $jid is not set
                 jid=$(
-                    sbatch --job-name=${model}_tsm_${source}_${target} -p vll \
+                    sbatch --job-name=${model}_tsm_${source}_${target} -p batch \
                     --export=ALL,source=$source,target=$target \
                     --begin=$begin \
                     $shfile | sed 's/[^0-9]*//g'
                 )
             else
                 jid=$(
-                    sbatch --job-name=${model}_tsm_${source}_${target} -p vll \
+                    sbatch --job-name=${model}_tsm_${source}_${target} -p batch \
                     --export=ALL,source=$source,target=$target \
                     --dependency=afterany:$jid \
                     --begin=$begin \

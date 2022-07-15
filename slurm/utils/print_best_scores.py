@@ -23,6 +23,8 @@ def main():
     parser = argparse.ArgumentParser(description='Print the Best Model\'s Info, Given JID Or Config Vars.')
     parser.add_argument('-o', '--one-line', action='store_true',
                         help='')
+    parser.add_argument('-ig', '--ignore-old-models', action='store_true',
+                        help='ignore models with $jid < 19000')
     parser.add_argument('-smb', '--select-model-by', choices=['acc', 'mca'], default='mca',
                         help='')
 
@@ -37,38 +39,62 @@ def main():
                         help='')
     parser.add_argument('-dom', '--domain', default=None,
                         help='')
+    parser.add_argument('-ph', '--phase', default=None,
+                        help='')
     parser.add_argument('-t', '--task', default=None,
+                        help='')
+    parser.add_argument('-abl', '--ablation', default=None,
+                        help='')
+
+    parser.add_argument('--test', action='store_true',
                         help='')
 
     args = parser.parse_args()
+
+    if args.test:
+        # for exp_dict in get_test_cases():
+        #     print_info_from_config_vars_for_test(exp_dict)
+        return
     
     if args.jids:
         if args.one_line:
             assert len(args.jids) == 1
             print_info_from_jid_for_test(args.jids[0])
         else:
-            print_df_from_jids(args.jids)
-    elif args.dataset and args.model:
+            print_df_from_jids(args.jids, ignore_old_models=args.ignore_old_models)
+    elif args.model:
         if args.one_line:
-            print_info_from_config_vars_for_test(args.dataset, args.backbone, args.model, args.domain, args.task)
+            exp_dict = {
+                'dataset': args.dataset,
+                'backbone': args.backbone,
+                'model': args.model,
+                'domain': args.domain,
+                'phase': args.phase,
+                'task': args.task,
+                'ablation': args.ablation,
+            }
+            print_info_from_config_vars_for_test(**exp_dict, select_model_by=args.select_model_by, ignore_old_models=args.ignore_old_models)
         else:
-            print_df_from_config_vars(args.dataset, args.backbone, args.model, args.domain, args.task, args.select_model_by)
+            print_df_from_config_vars(args.dataset, args.backbone, args.model, args.domain, args.task, args.select_model_by, args.ignore_old_models)
 
 
-def print_df_from_jids(jids):
-    def get_df_from_jid(jid):
+def print_df_from_jids(jids, ignore_old_models=False):
+    def get_df_from_jid(jid, ignore_old_models=False):
+        if ignore_old_models and int(jid) < 19000:
+            return None
         info = get_best_info_from_jid(jid)
         if info:
             return info2df(info)
-        return None
-    df_list = [get_df_from_jid(jid) for jid in jids]
+        else:
+            return None
+    df_list = [get_df_from_jid(jid, ignore_old_models=False) for jid in jids]
     df_list = [df for df in df_list if df is not None]  # drop None(cannot found the best model's pth)
     df = pd.concat(df_list)
     with pd.option_context('display.max_colwidth', None):  # more options can be specified also
         print(df)
 
 
-def print_df_from_config_vars(dataset, backbone, model, domain=None, task=None, select_model_by='mca'):
+def print_df_from_config_vars(dataset, backbone, model, domain=None, task=None, select_model_by='mca', ignore_old_models=False):
     p_train_workdirs = Path(r'work_dirs/train_output')
     p_target_workdir_parent = p_train_workdirs / dataset / backbone / model
     if domain and model == 'vanilla':
@@ -78,7 +104,7 @@ def print_df_from_config_vars(dataset, backbone, model, domain=None, task=None, 
     pattern = r'\d+__[^/]*$'
     df_list = []
     for p_target_workdir in [p for p in p_target_workdir_parent.glob('**/*') if p.is_dir() and re.search(pattern, str(p))]:
-        info = get_best_info_by_target_workdir(p_target_workdir, select_model_by)
+        info = get_best_info_by_target_workdir(p_target_workdir, select_model_by, ignore_old_models)
         if info:
             df = info2df(info)
             df_list.append(df)
@@ -88,13 +114,19 @@ def print_df_from_config_vars(dataset, backbone, model, domain=None, task=None, 
             indices = ['Dataset', 'Backbone', 'Model', 'Domain', 'Task']
             sort_by = ['Domain', 'Task', select_model_by.upper()]
             ascending = [True, True, False]
-            columns = ['ACC', 'MCA', 'JID'] if select_model_by == 'acc' else ['MCA', 'ACC', 'JID']
+            columns = ['ACC', 'MCA', 'UNK', 'JID'] if select_model_by == 'acc' else ['MCA', 'ACC', 'UNK', 'JID']
+            key = None
+        elif model == 'gcd4da':
+            indices = ['Dataset', 'Backbone', 'Model', 'Phase', 'Task', 'Ablation']
+            sort_by = ['Ablation', select_model_by.upper()]
+            ascending = [True, False]
+            columns = ['ACC', 'MCA', 'UNK', 'JID'] if select_model_by == 'acc' else ['MCA', 'ACC', 'UNK', 'JID']
             key = None
         else:
             indices = ['Dataset', 'Backbone', 'Model', 'Task']
             sort_by = ['Task', select_model_by.upper()]
             ascending = [True, False]
-            columns = ['ACC', 'MCA', 'JID'] if select_model_by == 'acc' else ['MCA', 'ACC', 'JID']
+            columns = ['ACC', 'MCA', 'UNK', 'JID'] if select_model_by == 'acc' else ['MCA', 'ACC', 'UNK', 'JID']
             key = lambda column: column.map(lambda value: ''.join(value.split('_')[::-1])) if column.name == 'Task' else column  # if task, sort by its target domain
         print(
             df
@@ -113,18 +145,39 @@ def print_info_from_jid_for_test(jid):
         exit(1)
 
 
-def print_info_from_config_vars_for_test(dataset, backbone, model, domain, task, select_model_by='mca'):
-    assert dataset and backbone and model and domain and task
+def print_info_from_config_vars_for_test(
+        dataset,
+        backbone,
+        model,
+        domain,
+        phase,
+        task,
+        ablation,
+        select_model_by='mca', ignore_old_models=False
+    ):
+    assert dataset and backbone and model and task
     p_train_workdirs = Path(r'work_dirs/train_output')
-    p_target_workdir_parent = p_train_workdirs / dataset / backbone / model / domain / task
+    if domain:  # vanilla
+        assert not (phase or ablation)
+        p_target_workdir_parent = p_train_workdirs / dataset / backbone / model / domain / task
+    elif phase or ablation:  # gcd4da
+        assert phase and ablation
+        p_target_workdir_parent = p_train_workdirs / dataset / backbone / model / phase / ablation / task
+    else:
+        p_target_workdir_parent = p_train_workdirs / dataset / backbone / model / task
+    assert p_target_workdir_parent.is_dir(), str(p_target_workdir_parent)
+        
     pattern = r'\d+__[^/]*$'
     infos = []
     for p_target_workdir in [p for p in p_target_workdir_parent.glob('**/*') if p.is_dir() and re.search(pattern, str(p))]:
-        info = get_best_info_by_target_workdir(p_target_workdir, select_model_by)
-        infos.append(info)
+        info = get_best_info_by_target_workdir(p_target_workdir, select_model_by, ignore_old_models)
+        if info:
+            infos.append(info)
     if infos:
-        # if vanilla: ['dataset', 'backbone', 'vanilla', 'domain', 'task', 'acc', 'mca', 'jid', 'ckpt', 'config']
-        # else:       ['dataset', 'backbone', 'model',             'task', 'acc', 'mca', 'jid', 'ckpt', 'config']
+        #               input                                                               output
+        # if vanilla:  ['dataset', 'backbone', 'vanilla', 'domain',            'task',      'acc', 'mca', 'jid', 'ckpt', 'config']
+        # elif gcd4da: ['dataset', 'backbone', 'gcd4da',  'phase', 'ablation', 'task',      'acc', 'mca', 'jid', 'ckpt', 'config']
+        # else:        ['dataset', 'backbone', 'model',                        'task',      'acc', 'mca', 'jid', 'ckpt', 'config']
         best_info = max(infos, key=lambda info: info[select_model_by])
         print(' '.join(map(str, best_info.values())))
     else:
@@ -155,18 +208,26 @@ def get_best_info_from_jid(jid, select_model_by='mca'):
     return get_best_info_by_target_workdir(p_target_workdir, select_model_by)
 
 
-def get_best_info_by_target_workdir(p_target_workdir, select_model_by='mca'):
+def get_best_info_by_target_workdir(p_target_workdir, select_model_by='mca', ignore_old_models=False):
+    def p_log2jid(p_log):
+        jid = int(re.findall(r'/(\d+)__', str(p_log))[0])
+        return jid
+
     if p_target_workdir: # for a single job
         p_logs = list(p_target_workdir.glob('**/*.log'))
         p_logs_and_score_dicts = [(p_log, get_test_scores_from_logfile(p_log)) for p_log in p_logs]
         p_logs_and_score_dicts = [(p_log, score_dict) for p_log, score_dict in p_logs_and_score_dicts if score_dict]  # drop jobs with no score
+        if ignore_old_models:
+            p_logs_and_score_dicts = [(p_log, score_dict) for p_log, score_dict in p_logs_and_score_dicts if p_log2jid(p_log) >= 19000]
         if p_logs_and_score_dicts:
             p_logs, score_dicts = zip(*p_logs_and_score_dicts)
             arg_best = max(range(len(score_dicts)), key=lambda i: score_dicts[i][select_model_by])
             p_log = p_logs[arg_best]
-            jid = int(re.findall(r'/(\d+)__', str(p_log))[0])
-            if 'only' in str(p_log):
+            jid = p_log2jid(p_log)
+            if 'vanilla' in str(p_log):
                 pattern = r'/(?P<dataset>[\w-]+)/(?P<backbone>[\w-]+)/(?P<model>[\w-]+)/(?P<domain>[\w-]+)/(?P<task>[\w-]+)/\d+__'
+            elif 'gcd4da' in str(p_log):
+                pattern = r'/(?P<dataset>[\w-]+)/(?P<backbone>[\w-]+)/(?P<model>[\w-]+)/(?P<phase>[\w-]+)/(?P<ablation>[\w-]+)/(?P<task>[\w-]+)/\d+__'
             else:
                 pattern = r'/(?P<dataset>[\w-]+)/(?P<backbone>[\w-]+)/(?P<model>[\w-]+)/(?P<task>[\w-]+)/\d+__'
             m = re.search(pattern, str(p_log))
@@ -191,7 +252,7 @@ def get_test_scores_from_logfile(p_log):
     with p_log.open('r') as f:
         data = f.read()
     # [\w\W]: work-around for matching all characters including new-line
-    pattern = r'Testing results of the best checkpoint[\w\W]*top1_acc: (?P<acc>[\d\.]+)[\w\W]*mean_class_accuracy: (?P<mca>[\d\.]+)'
+    pattern = r'Testing results of the best checkpoint[\w\W]*top1_acc: (?P<acc>[\d\.]+)[\w\W]*mean_class_accuracy: (?P<mca>[\d\.]+)([\w\W]*recall_unknown: (?P<unk>[\d\.]+))?'
     found = re.search(pattern, data)
     if found:
         test_scores = found.groupdict()
@@ -204,7 +265,7 @@ def info2df(info: dict):
     del info['ckpt']
     del info['config']
     # boilerplates to convert info-dict to df
-    all_capital = ['jid', 'acc', 'mca']
+    all_capital = ['jid', 'acc', 'mca', 'unk']
     info = {k.capitalize() if k not in all_capital else k.upper(): [v] for k, v in info.items()}
     df = pd.DataFrame.from_dict(info)
     df = df.set_index('JID')

@@ -69,7 +69,8 @@ class OSBPTSMHead(BaseHead):
         
         self.fc_block = []
         for i in range(self.num_layers):
-            self.fc_block.append(self.dropouts[i])
+            if self.dropout_ratio != 0:
+                self.fc_block.append(self.dropouts[i])
             self.fc_block.append(self.fcs[i])
             if i != self.num_layers - 1:
                 self.fc_block.append(nn.ReLU())
@@ -83,8 +84,8 @@ class OSBPTSMHead(BaseHead):
 
     def init_weights(self):
         """Initiate the parameters from scratch."""
-        for self.fc in self.fcs:
-            normal_init(self.fc, std=self.init_std)
+        for layer in self.fc_block:
+            normal_init(layer, std=self.init_std)
     
     def forward(self, x, num_segs, domains=None):
         """
@@ -95,9 +96,9 @@ class OSBPTSMHead(BaseHead):
             N: batch size
             num_segs: num_clips
         """
-        if domains.shape[0] > 0:
+        if domains is not None and domains.shape[0] > 0:  # if train
             target_idx_mask = torch.squeeze(torch.from_numpy(domains == 'target'))
-            target_idx_mask = target_idx_mask.repeat(num_segs)
+            target_idx_mask = target_idx_mask.repeat(self.num_segments)
             x = GradReverse.apply(x, target_idx_mask)
 
         # [N * num_segs, in_channels, 7, 7]
@@ -133,6 +134,8 @@ class OSBPTSMHead(BaseHead):
             labels = labels.unsqueeze(0)
 
         if not self.multi_class and cls_score.size() != labels.size():
+            # with np.printoptions(suppress=True, linewidth=np.inf, precision=2):
+            #     print(np.concatenate([cls_score[domains=='source'].detach().cpu().numpy(), labels[domains=='source'].unsqueeze(1).detach().cpu().numpy()], axis=1))
             top_k_acc = top_k_accuracy(cls_score.detach().cpu().numpy(),
                                        labels.detach().cpu().numpy(),
                                        self.topk)

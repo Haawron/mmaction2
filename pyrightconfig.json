@@ -1,0 +1,22 @@
+{   
+    "exclude": [
+        ".github",
+        ".ipynb_checkpoints",
+        ".vscode",
+        "**/__pycache__",
+        "data/",
+        "work_dirs/",
+        "mmaction2.egg-info/",
+        "slurm/logs/",
+    ],
+  
+    "defineConstant": {
+        "DEBUG": true
+    },
+  
+    "reportMissingImports": true,
+    "reportMissingTypeStubs": false,
+  
+    "pythonVersion": "3.7",
+    "pythonPlatform": "Linux",
+}

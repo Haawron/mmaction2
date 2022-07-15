@@ -15,7 +15,15 @@ import re
 parser = argparse.ArgumentParser(description='Print the Best Model\'s Info, Given JID Or Config Vars.')
 parser.add_argument('-j', '--jids', default=None, nargs='+',
                     help='The main job ids of the task')
+parser.add_argument('-m', '--metric', default='mca', choices=['mca', 'acc', 'unk'],
+                    help='')
 args = parser.parse_args()
+
+metric = {
+    'mca': 'mean_class_accuracy',
+    'acc': 'top1_acc',
+    'unk': 'recall_unknown'
+}[args.metric]
 
 p_test_workdir = Path(r'work_dirs/test_output')
 infos = []
@@ -41,13 +49,13 @@ with pd.option_context('display.float_format', '{:.1f}'.format):
         mask = df['domain'] == df['tested_on']
         df_same = df.loc[mask, :]
         df_diff = df.loc[~mask, :]
-        rearrange = lambda df: df.sort_values(by=['task', 'tested_on']).set_index(['task', 'domain', 'tested_on', 'openness']).unstack(level=[1, 2, 3])['mean_class_accuracy']
+        rearrange = lambda df: df.sort_values(by=['task', 'tested_on']).set_index(['task', 'domain', 'tested_on', 'openness']).unstack(level=[1, 2, 3])[metric]
         print(rearrange(df_same))
         print()
         print(rearrange(df_diff))
     else:
-        key = lambda column: column.map(lambda value: ''.join(value.split('_')[::-1])) if column.name == 'Task' else column
-        rearrange = lambda df: df.sort_values(by=['task'], key=key).set_index(['model', 'task', 'openness']).unstack(level=[1, 2])[['mean_class_accuracy']]
+        key = lambda column: column.map(lambda value: ''.join(value.split('_')[::-1])) if column.name == 'task' else column
+        rearrange = lambda df: df.sort_values(by=['task'], key=key).set_index(['model', 'task', 'openness']).unstack(level=[1, 2])[[metric]]
         print(rearrange(df))
 
 # todos:

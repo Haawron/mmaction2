@@ -67,6 +67,7 @@ class DomainAdaptationRunner(EpochBasedRunner):
                 data_batches[idx_data_batch]['label'] = data_batches[idx_data_batch]['label'][:main_batch_length]
             self._inner_iter = i
             self.call_hook('before_train_iter')
+            kwargs['iter'] = self._iter
             self.run_iter(data_batches, self.domains, train_mode=True, **kwargs)
             self.call_hook('after_train_iter')
             self._iter += 1

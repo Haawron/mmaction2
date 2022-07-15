@@ -28,14 +28,14 @@ else
                     echo -e "Checkpoint:\t$ckpt"
                     echo -e "Config:\t\t$config\n"
                     for target in P02 P04 P22; do
-                        for split in 'train' 'test'; do
+                        for split in 'train' 'valid' 'test'; do
                             openness=$([ "$split" == 'train' ] && echo "closed" || echo "open")
                             outfile="work_dirs/train_output/${dataset}/${backbone}/osvm/${model}/${domain}/${target}/${jid}_${split}.pkl"
                             annfile="data/epic-kitchens-100/filelist_${target}_${split}_${openness}.txt"
                             python tools/test.py $config \
                                 $ckpt \
                                 --out $outfile \
-                                --eval top_k_accuracy mean_class_accuracy confusion_matrix \
+                                --eval top_k_accuracy mean_class_accuracy confusion_matrix recall_unknown \
                                 --average-clips score \
                                 --cfg-options \
                                     data.test.ann_file=$annfile
@@ -48,7 +48,7 @@ else
                     echo "Given model is vanilla but the task is not source-only"
                 fi
             else  # not vanilla
-                read dataset backbone model task acc mca jid ckpt config <<< $output
+                read dataset backbone model task acc mca unk jid ckpt config <<< $output
                 echo -e "\n====================================================================\n"
                 echo "Testing the best model of [jid $jid]"
                 echo 
@@ -58,6 +58,7 @@ else
                 echo -e "Task:\t\t$task"
                 echo -e "Test ACC:\t$acc"
                 echo -e "Test Mean-Class ACC:\t$mca"
+                echo -e "Test UNK:\t$unk"
                 echo -e "Checkpoint:\t$ckpt"
                 echo -e "Config:\t\t$config\n"
 
@@ -65,7 +66,7 @@ else
                 target=${task#*_}
                 echo -e "Task: ${source} --> ${target}\n"
                 
-                for split in "train" "test"; do
+                for split in "train" "valid" "test"; do
                     domain=$([ "$split" == 'train' ] && echo $source || echo $target)
                     openness=$([ "$split" == 'train' ] && echo "closed" || echo "open")
                     outfile="work_dirs/train_output/${dataset}/${backbone}/osvm/${model}/${task}/${jid}_${split}.pkl"
@@ -74,10 +75,11 @@ else
                     python tools/test.py $config \
                         $ckpt \
                         --out $outfile \
-                        --eval top_k_accuracy mean_class_accuracy confusion_matrix \
+                        --eval top_k_accuracy mean_class_accuracy confusion_matrix recall_unknown \
                         --average-clips score \
                         --cfg-options \
-                            data.test.ann_file=$annfile
+                            data.test.ann_file=$annfile \
+                            data.videos_per_gpu=20
                     if [ $? -ne 0 ]; then
                         break
                     fi

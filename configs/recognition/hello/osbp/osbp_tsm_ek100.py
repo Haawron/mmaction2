@@ -18,7 +18,8 @@ model = dict(
         loss_cls=dict(
             type='OSBPLoss',
             num_classes=num_classes,
-            target_domain_label=.5),
+            target_domain_label=.5,
+            weight_loss=2.),
         num_classes=num_classes,
         in_channels=2048,
         num_layers=1,
@@ -28,7 +29,7 @@ model = dict(
         dropout_ratio=0.5,
         init_std=0.001,
         is_shift=True),
-    test_cfg=dict(average_clips='prob'))
+    test_cfg=dict(average_clips='score'))
 # model training and testing settings
 # dataset settings
 data_root = '/local_datasets/epic-kitchens-100/EPIC-KITCHENS'
@@ -149,7 +150,7 @@ total_epochs = 50
 checkpoint_config = dict(interval=10)
 evaluation = dict(
     interval=10,
-    metrics=['top_k_accuracy', 'mean_class_accuracy', 'confusion_matrix'],  # valid, test 공용으로 사용
+    metrics=['top_k_accuracy', 'mean_class_accuracy', 'recall_unknown', 'confusion_matrix'],  # valid, test 공용으로 사용
     save_best='mean_class_accuracy')
 log_config = dict(
     interval=10,  # every [ ] steps

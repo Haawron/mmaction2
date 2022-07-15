@@ -10,7 +10,7 @@ else
     for jid in "$@"; do
         output=$(python slurm/print_best_scores.py -j ${jid} -o)
         if [ $? -eq 0 ]; then
-            read dataset backbone model task acc mca jid ckpt config <<< $output
+            read dataset backbone model task acc mca unk jid ckpt config <<< $output
             echo -e "\n====================================================================\n"
             echo "Testing the best model of [jid $jid]"
             echo 
@@ -19,6 +19,8 @@ else
             echo -e "Model:\t\t$model"
             echo -e "Task:\t\t$task"
             echo -e "Test ACC:\t$acc"
+            echo -e "Test MCA:\t$mca"
+            echo -e "Test UNK:\t$unk"
             echo -e "Checkpoint:\t$ckpt"
             echo -e "Config:\t\t$config\n"
 
@@ -32,7 +34,7 @@ else
                 python tools/test.py $config \
                     $ckpt \
                     --out $outfile \
-                    --eval top_k_accuracy mean_class_accuracy confusion_matrix \
+                    --eval top_k_accuracy mean_class_accuracy confusion_matrix $([[ $openness = 'open' ]] && echo 'recall_unknown' || echo '') \
                     --average-clips score \
                     --cfg-options \
                         data.test.ann_file=$annfile

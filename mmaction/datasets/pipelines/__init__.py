@@ -15,14 +15,14 @@ from .loading import (ArrayDecode, AudioDecode, AudioDecodeInit,
                       LoadAudioFeature, LoadHVULabel, LoadLocalizationFeature,
                       LoadProposals, OpenCVDecode, OpenCVInit, PIMSDecode,
                       PIMSInit, PyAVDecode, PyAVDecodeMotionVector, PyAVInit,
-                      RawFrameDecode, SampleAVAFrames, SampleFrames,
+                      RawFrameDecode, SampleAVAFrames, SampleFrames, COPSampleFrames,
                       SampleProposalFrames, UntrimmedSampleFrames)
 from .pose_loading import (GeneratePoseTarget, LoadKineticsPose,
                            PaddingWithLoop, PoseDecode, PoseNormalize,
                            UniformSampleFrames)
 
 __all__ = [
-    'SampleFrames', 'PyAVDecode', 'DecordDecode', 'DenseSampleFrames',
+    'SampleFrames', 'COPSampleFrames', 'PyAVDecode', 'DecordDecode', 'DenseSampleFrames',
     'OpenCVDecode', 'MultiScaleCrop', 'RandomResizedCrop', 'RandomCrop',
     'Resize', 'Flip', 'Fuse', 'Normalize', 'ThreeCrop', 'CenterCrop',
     'TenCrop', 'ImageToTensor', 'Transpose', 'Collect', 'FormatShape',

@@ -5,6 +5,8 @@ import warnings
 from abc import ABCMeta, abstractmethod
 from collections import OrderedDict, defaultdict
 
+import os
+import re
 import mmcv
 import numpy as np
 import torch
@@ -179,8 +181,8 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
 
         metrics = metrics if isinstance(metrics, (list, tuple)) else [metrics]
         allowed_metrics = [
-            'top_k_accuracy', 'mean_class_accuracy', 'mean_average_precision',
-            'mmit_mean_average_precision', 'OSD_prec', 'confusion_matrix'
+            'top_k_accuracy', 'mean_class_accuracy', 'H_mean_class_accuracy', 'mean_average_precision',
+            'mmit_mean_average_precision', 'recall_unknown', 'confusion_matrix'
         ]
 
         for metric in metrics:
@@ -189,6 +191,11 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
 
         eval_results = OrderedDict()
         gt_labels = [ann['label'] for ann in self.video_infos]
+
+        results = np.array(results)
+        if self.num_classes:
+            if results.shape[1] > self.num_classes:
+                results = np.hstack([results[:,:self.num_classes-1], results[:,self.num_classes-1:].max(axis=1, keepdims=True)])
 
         for metric in metrics:
             msg = f'Evaluating {metric} ...'
@@ -222,6 +229,19 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
                 print_log(log_msg, logger=logger)
                 continue
 
+            if metric == 'H_mean_class_accuracy':  # only valid for UNK
+                pred = np.argmax(results, axis=1)
+                cf_mat = confusion_matrix(pred, gt_labels)
+                cls_cnt = cf_mat.sum(axis=1)
+                cls_hit = np.diag(cf_mat)
+                cls_acc = np.array([hit / cnt if cnt else 0.0 for cnt, hit in zip(cls_cnt, cls_hit)])
+                os, unk = cls_acc[:-1].mean(), cls_acc[-1]
+                H_mean_acc = 2 * os * unk / (os + unk)
+                eval_results['H_mean_class_accuracy'] = H_mean_acc
+                log_msg = f'\nH_mean_acc\t{H_mean_acc:.4f}'
+                print_log(log_msg, logger=logger)
+                continue
+
             if metric in [
                     'mean_average_precision', 'mmit_mean_average_precision'
             ]:
@@ -241,19 +261,25 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
                 print_log(log_msg, logger=logger)
                 continue
             
-            if metric == 'OSD_prec':
+            if metric == 'recall_unknown':
                 pred = np.argmax(results, axis=1)
-                mat = confusion_matrix(pred, gt_labels)
-                prec = mat[-1,-1] / mat[:,-1].sum()
-                eval_results['OSD_prec'] = prec
-                log_msg = f'\nOSD_prec\t{prec:.4f}'
+                conf = confusion_matrix(pred, gt_labels)
+                recall = conf[-1,-1] / conf[-1,:].sum()
+                eval_results['recall_unknown'] = recall
+                log_msg = f'\nrecall_unknown\t{recall:.4f}'
                 print_log(log_msg, logger=logger)
                 continue
 
             if metric == 'confusion_matrix':
                 pred = np.argmax(results, axis=1)
-                mat = confusion_matrix(pred, gt_labels)
-                log_msg = '\n' + str(mat)
+                conf = confusion_matrix(pred, gt_labels)
+                h, w = conf.shape
+                with np.printoptions(threshold=np.inf, linewidth=100000):
+                    s = str(conf)
+                if 'SRUN_DEBUG' in os.environ:  # if in srun(debuging) session
+                    for start, end in reversed([(m.start(0), m.end(0)) for i, m in enumerate(re.finditer(r'\d+', str(s))) if i%h == i//w]):
+                        s = s[:start] + '\033[1m' + s[start:end] + '\033[0m' + s[end:]  # diag vals to be bold
+                log_msg = '\n' + s
                 print_log(log_msg, logger=logger)
                 continue
 

@@ -2,7 +2,7 @@
 import numpy as np
 
 
-def confusion_matrix(y_pred, y_real, normalize=None):
+def confusion_matrix(y_pred, y_real, normalize=None, max_label=-1):
     """Compute confusion matrix.
 
     Args:
@@ -42,9 +42,13 @@ def confusion_matrix(y_pred, y_real, normalize=None):
         raise TypeError(
             f'y_real dtype must be np.int64, but got {y_real.dtype}')
 
-    label_set = np.unique(np.concatenate((y_pred, y_real)))
-    num_labels = len(label_set)
-    max_label = label_set[-1]
+    if max_label == -1:
+        label_set = np.unique(np.concatenate((y_pred, y_real)))
+        num_labels = len(label_set)
+        max_label = label_set[-1]
+    else:
+        label_set = np.arange(max_label)
+        num_labels = max_label
     label_map = np.zeros(max_label + 1, dtype=np.int64)
     for i, label in enumerate(label_set):
         label_map[label] = i

@@ -13,17 +13,18 @@ from .dataset_wrappers import ConcatDataset, RepeatDataset
 from .hvu_dataset import HVUDataset
 from .image_dataset import ImageDataset
 from .pose_dataset import PoseDataset
-from .rawframe_dataset import RawframeDataset
+from .rawframe_dataset import RawframeDataset, COPRawframeDataset
 from .rawvideo_dataset import RawVideoDataset
 from .ssn_dataset import SSNDataset
 from .video_dataset import VideoDataset
 from .uda_rawframe_dataset import UDARawframeDataset
+from .contrastive_rawframe_dataset import ContrastiveRawframeDataset
 
 __all__ = [
     'VideoDataset', 'build_dataloader', 'build_dataset', 'RepeatDataset',
-    'RawframeDataset', 'UDARawframeDataset', 'BaseDataset', 'ActivityNetDataset', 'SSNDataset',
+    'RawframeDataset', 'COPRawframeDataset', 'UDARawframeDataset', 'BaseDataset', 'ActivityNetDataset', 'SSNDataset',
     'HVUDataset', 'AudioDataset', 'AudioFeatureDataset', 'ImageDataset',
     'RawVideoDataset', 'AVADataset', 'AudioVisualDataset',
     'BaseMiniBatchBlending', 'CutmixBlending', 'MixupBlending', 'DATASETS',
-    'PIPELINES', 'BLENDINGS', 'PoseDataset', 'ConcatDataset'
+    'PIPELINES', 'BLENDINGS', 'PoseDataset', 'ConcatDataset', 'ContrastiveRawframeDataset'
 ]

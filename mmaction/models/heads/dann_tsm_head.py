@@ -73,7 +73,6 @@ class DANNTSMHead(BaseHead):
                     fc = nn.Linear(c_in//2**(num_layers-1), c_out_)
                 dropout = nn.Dropout(p=self.dropout_ratio) if self.dropout_ratio > 0 else nn.Identity()
                 act = nn.ReLU() if i < num_layers - 1 else nn.Identity()
-                # norm = nn.BatchNorm1d(c_out_)
                 fc_block += [fc, dropout, act]
             return nn.Sequential(*fc_block)
         
@@ -97,31 +96,31 @@ class DANNTSMHead(BaseHead):
             num_segs: num_clips
         """
 
-        # [N * num_segs, in_channels, 7, 7]
-        f = self.avg_pool(f)
-        # [N * num_segs, in_channels, 1, 1]
-        f = torch.flatten(f, start_dim=1)  # squeeze??
-        # [N * num_segs, in_channels]
-        self.source_idx = (domains == 'source') if domains is not None else np.ones(f.shape[0]//self.num_segments, dtype=bool)
-        repeated_source_idx = np.repeat(self.source_idx, self.num_segments)  # same as torch.repeat_interleave
-        cls_score = self.fc_cls(f[repeated_source_idx])
-        domain_score = self.fc_domain(self.grl(f))
-        # [N * num_segs, num_classes]
-        cls_score = self.unflatten_based_on_shiftedness(cls_score)
-        domain_score = self.unflatten_based_on_shiftedness(domain_score)
-        # [2 * N, num_segs // 2, num_classes] or [N, num_segs, num_classes]
-        cls_score = self.consensus_cls(cls_score)
-        domain_score = self.consensus_domain(domain_score)
-        # [N, 1, num_classes]
-        return [cls_score.squeeze(dim=1), domain_score.squeeze(dim=1)]  # [N, num_classes]x2
+        # [N*segs, C_in, 7, 7]
+        f = self.avg_pool(f)  # [N*segs, C_in, 1, 1]
+        f = torch.flatten(f, start_dim=1)  # [N*segs, C_in]
+        if domains is not None and domains.shape[0] > 0:  # if train
+            self.idx_classified = (domains == 'source')
+        else:  # if val
+            self.idx_classified = np.ones(f.shape[0]//self.num_segments, dtype=bool)  # all inputs have labels => can be classified
+        repeated_idx_classified = np.repeat(self.idx_classified, self.num_segments)  # same as torch.repeat_interleave
+        cls_score = self.fc_cls(f[repeated_idx_classified])  # [N*segs, K]
+        domain_score = self.fc_domain(self.grl(f))  # [N*segs, 1]
+    
+        cls_score = self.unflatten_based_on_shiftedness(cls_score)  # [N, segs, K] or [2*N, segs//2, K] (not shifted)
+        domain_score = self.unflatten_based_on_shiftedness(domain_score)  # [N, segs, 1] or [2*N, segs//2, 1] (not shifted)
+        
+        cls_score = self.consensus_cls(cls_score)  # [N, 1, K]
+        domain_score = self.consensus_domain(domain_score)  # [N, 1, 1]
+        return [cls_score.squeeze(dim=1), domain_score.squeeze(dim=1)]  # [N, num_classes], [N, 1]
 
     def loss(self, cls_score, labels, domains, **kwargs):
         losses = dict()
-        labels = labels[self.source_idx]
+        labels = labels[self.idx_classified]
         if labels.shape == torch.Size([]):
             labels = labels.unsqueeze(0)
         elif labels.dim() == 1 and labels.size()[0] == self.num_classes \
-                and cls_score.size()[0] == 1:
+                and cls_score[0].size()[0] == 1:
             # Fix a bug when training with soft labels and batch size is 1.
             # When using soft labels, `labels` and `cls_socre` share the same
             # shape.
@@ -148,7 +147,7 @@ class DANNTSMHead(BaseHead):
                 losses.update(loss)  # loss_domain
             else:
                 losses['loss_cls'] = loss
-
+        
         return losses
 
     def unflatten_based_on_shiftedness(self, x):
@@ -156,5 +155,5 @@ class DANNTSMHead(BaseHead):
             # [2 * N, num_segs // 2, num_classes]
             return x.view((-1, self.num_segments // 2) + x.size()[1:])
         else:
-            # [N, num_segs, num_classes]
+            # [N * num_segs, *] -> [N, num_segs, *]
             return x.view((-1, self.num_segments) + x.size()[1:])
