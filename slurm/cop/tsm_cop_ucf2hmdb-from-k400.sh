@@ -16,7 +16,7 @@ lr="${lrs[SLURM_ARRAY_TASK_ID]}"
 
 N=4
 config=configs/recognition/hello/cop/cop_tsm_ucf2hmdb.py
-workdir=work_dirs/train_output/ucf2hmdb/tsm/cop/${SLURM_ARRAY_JOB_ID}__${SLURM_JOB_NAME}/${SLURM_ARRAY_TASK_ID}/${current_time}
+workdir=work_dirs/train_output/ucf2hmdb/tsm/cop-from-k400/${SLURM_ARRAY_JOB_ID}__${SLURM_JOB_NAME}/${SLURM_ARRAY_TASK_ID}/${current_time}
 OMP_NUM_THREADS=${N} MKL_NUM_THREADS=${N} torchrun --nproc_per_node=${N} --master_port=$((10000+$RANDOM%20000)) tools/train.py $config \
     --launcher pytorch \
     --work-dir $workdir \

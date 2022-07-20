@@ -151,8 +151,8 @@ optimizer_config = dict(grad_clip=dict(max_norm=20, norm_type=2))
 lr_config = dict(
     policy='step', step=[20, 40],
 )
-total_epochs = 3000
-checkpoint_config = dict(interval=300)
+total_epochs = 10000
+checkpoint_config = dict(interval=1000)
 evaluation = dict(
     interval=5,
     metrics=['top_k_accuracy', 'mean_class_accuracy', 'confusion_matrix'],  # valid, test 공용으로 사용

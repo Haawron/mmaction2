@@ -1,30 +1,21 @@
 # model settings
 num_classes = 12
 
-domain_adaptation = True  # True to use DomainAdaptationRunner
+domain_adaptation = False  # True to use DomainAdaptationRunner
 find_unused_parameters = True  # True to resolve the issue when Freeze & dist
 
 model = dict(
-    type='DARecognizer2d',
+    type='Recognizer2D',
     backbone=dict(
         type='ResNetTSM',
         pretrained=None,
         depth=50,
         num_segments=8,
         norm_eval=False,
-        shift_div=8,
-        frozen_stages=4),
+        shift_div=8),
     cls_head=dict(
-        type='DANNTSMHead',
-        loss_cls=dict(
-            type='DANNClassifierLoss',
-            num_classes=num_classes),
-        loss_domain=dict(
-            type='DANNDomainLoss',
-            loss_weight=.5),
+        type='TSMHead',
         num_classes=num_classes,
-        num_cls_layers=1,
-        num_domain_layers=4,
         num_segments=8,
         in_channels=2048,
         spatial_type='avg',
@@ -35,12 +26,10 @@ model = dict(
     test_cfg=dict(average_clips='score'))
 # model training and testing settings
 # dataset settings
-data_prefix_source = '/local_datasets/ucf101/rawframes'
-data_prefix_target = '/local_datasets/hmdb51/rawframes'
-ann_file_train_source = 'data/_filelists/ucf101/filelist_ucf_train_closed.txt'
-ann_file_train_target = 'data/_filelists/hmdb51/filelist_hmdb_train_open.txt'
-ann_file_valid_target = 'data/_filelists/hmdb51/filelist_hmdb_val_closed.txt'
-ann_file_test_target = 'data/_filelists/hmdb51/filelist_hmdb_test_closed.txt'
+data_prefix = '/local_datasets/hmdb51/rawframes'
+ann_file_train = 'data/_filelists/hmdb51/filelist_hmdb_train_closed.txt'
+ann_file_valid = 'data/_filelists/hmdb51/filelist_hmdb_val_closed.txt'
+ann_file_test = 'data/_filelists/hmdb51/filelist_hmdb_test_closed.txt'
 img_norm_cfg = dict(
     mean=[128., 128., 128.], std=[50., 50., 50.], to_bgr=False)
 train_pipeline = [
@@ -94,36 +83,27 @@ test_pipeline = [
     dict(type='ToTensor', keys=['imgs'])
 ]
 data = dict(
-    videos_per_gpu=12,  # 여기가 gpu당 batch size임, source+target 한 번에 넣는 거라서 배치 사이즈 반절
+    videos_per_gpu=24,
     workers_per_gpu=4,
     val_dataloader=dict(videos_per_gpu=20),
-    train=[
-        dict(
-            type='RawframeDataset',
-            ann_file=ann_file_train_source,
-            data_prefix=data_prefix_source,
-            start_index=1,  # frame number starts with
-            filename_tmpl='img_{:05}.jpg',
-            pipeline=train_pipeline),
-        dict(
-            type='RawframeDataset',
-            ann_file=ann_file_train_target,
-            data_prefix=data_prefix_target,
-            start_index=1,
-            filename_tmpl='img_{:05}.jpg',
-            pipeline=train_pipeline),
-    ],
+    train=dict(
+        type='RawframeDataset',
+        ann_file=ann_file_train,
+        data_prefix=data_prefix,
+        start_index=1,  # frame number starts with
+        filename_tmpl='img_{:05}.jpg',
+        pipeline=train_pipeline),
     val=dict(
         type='RawframeDataset',
-        ann_file=ann_file_valid_target,
-        data_prefix=data_prefix_target,
+        ann_file=ann_file_valid,
+        data_prefix=data_prefix,
         start_index=1,
         filename_tmpl='img_{:05}.jpg',
         pipeline=val_pipeline),
     test=dict(
         type='RawframeDataset',
-        ann_file=ann_file_test_target,
-        data_prefix=data_prefix_target,
+        ann_file=ann_file_test,
+        data_prefix=data_prefix,
         start_index=1,
         filename_tmpl='img_{:05}.jpg',
         pipeline=test_pipeline)
@@ -132,7 +112,7 @@ data = dict(
 optimizer = dict(
     type='SGD',
     constructor='TSMOptimizerConstructor',
-    paramwise_cfg=dict(fc_lr5=False),
+    paramwise_cfg=dict(fc_lr5=True),
     lr=4 * 1e-3,
     momentum=0.9,
     weight_decay=0.0001)
@@ -157,7 +137,7 @@ annealing_runner = False
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = 'work_dirs/hello/ucf2hmdb/COP/DANN'
-load_from = 'work_dirs/train_output/ucf-hmdb/tsm/cop/2037__tsm-cop-ucf-hmdb/1/20220706-011206/latest.pth'
+work_dir = 'work_dirs/hello/ucf2hmdb/cop/linear-probe'
+load_from = 'work_dirs/train_output/ucf2hmdb/tsm/cop/2037__tsm-cop-ucf-hmdb/1/20220706-011206/epoch_3000.pth'
 resume_from = None
 workflow = [('train', 1)]

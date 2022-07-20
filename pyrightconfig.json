@@ -1,9 +1,10 @@
 {   
     "exclude": [
-        ".github",
-        ".ipynb_checkpoints",
-        ".vscode",
-        "**/__pycache__",
+        ".git/",
+        ".github/",
+        ".vscode/",
+        "**/.ipynb_checkpoints/",
+        "**/__pycache__/",
         "data/",
         "work_dirs/",
         "mmaction2.egg-info/",

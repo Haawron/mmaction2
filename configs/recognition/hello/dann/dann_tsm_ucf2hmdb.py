@@ -1,26 +1,37 @@
 # model settings
-num_clips = 3
-clip_len = 16
-clip_interval = 8
-frame_interval = 1
+num_classes = 12
 
-num_classes = 6
 
-domain_adaptation = True  # True to use DomainAdaptationRunner
-find_unused_parameters = False  # True to resolve the issue when Freeze & dist
-
+domain_adaptation = True
 
 model = dict(
-    type='Recognizer3D',
-    backbone=dict(type='X3D', gamma_w=1, gamma_b=2.25, gamma_d=2.2),
+    type='DARecognizer2d',
+    backbone=dict(
+        type='ResNetTSM',
+        pretrained=None,
+        depth=50,
+        num_segments=8,
+        norm_eval=False,
+        shift_div=8),
     cls_head=dict(
-        type='X3DHead',
-        in_channels=432,
-        num_classes=400,
+        type='DANNTSMHead',
+        loss_cls=dict(
+            type='DANNClassifierLoss',
+            num_classes=num_classes),
+        loss_domain=dict(
+            type='DANNDomainLoss',
+            loss_weight=.5),
+        num_classes=num_classes,
+        num_cls_layers=1,
+        num_domain_layers=4,
+        num_segments=8,
+        in_channels=2048,
         spatial_type='avg',
+        consensus=dict(type='AvgConsensus', dim=1),
         dropout_ratio=0.5,
-        fc1_bias=False),
-    test_cfg=dict(average_clips='prob'))  # prob - prob, score - -distance, None - feature
+        init_std=0.001,
+        is_shift=True),
+    test_cfg=dict(average_clips='score'))
 # model training and testing settings
 # dataset settings
 data_prefix_source = '/local_datasets/ucf101/rawframes'
@@ -29,23 +40,23 @@ ann_file_train_source = 'data/_filelists/ucf101/filelist_ucf_train_closed.txt'
 ann_file_train_target = 'data/_filelists/hmdb51/filelist_hmdb_train_open.txt'
 ann_file_valid_target = 'data/_filelists/hmdb51/filelist_hmdb_val_closed.txt'
 ann_file_test_target = 'data/_filelists/hmdb51/filelist_hmdb_test_closed.txt'
+# img_norm_cfg = dict(
+#     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_bgr=False)
 img_norm_cfg = dict(
     mean=[128., 128., 128.], std=[50., 50., 50.], to_bgr=False)
-
-crop_size = 112
 train_pipeline = [
-    dict(
-        type='COPSampleFrames',
-        num_clips=num_clips,
-        clip_len=clip_len,  # frames / clip
-        clip_interval=clip_interval,
-        frame_interval=frame_interval),
+    dict(type='SampleFrames', clip_len=1, frame_interval=1, num_clips=8),
     dict(type='RawFrameDecode'),
-    dict(type='Resize', scale=(128, -1)),
-    dict(type='CenterCrop', crop_size=crop_size),
-    dict(type='Resize', scale=(crop_size, crop_size), keep_ratio=False),
-    # dict(type='Flip', flip_ratio=.5),
-    # dict(type='ColorJitter', hue=.5),
+    dict(type='Resize', scale=(-1, 256)),
+    dict(
+        type='MultiScaleCrop',
+        input_size=224,
+        scales=(1, 0.875, 0.66),
+        random_crop=False,
+        max_wh_scale_gap=1,
+        num_fixed_crops=13),
+    dict(type='Resize', scale=(224, 224), keep_ratio=False),
+    dict(type='Flip', flip_ratio=0.5),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='FormatShape', input_format='NCHW'),
     dict(type='Collect', keys=['imgs', 'label'], meta_keys=[]),
@@ -53,14 +64,14 @@ train_pipeline = [
 ]
 val_pipeline = [
     dict(
-        type='COPSampleFrames',
-        num_clips=num_clips,
-        clip_len=clip_len,  # frames / clip
-        clip_interval=clip_interval,
-        frame_interval=frame_interval),
+        type='SampleFrames',
+        clip_len=1,
+        frame_interval=1,
+        num_clips=8,
+        test_mode=True),
     dict(type='RawFrameDecode'),
-    dict(type='Resize', scale=(128, -1)),
-    dict(type='CenterCrop', crop_size=crop_size),
+    dict(type='Resize', scale=(-1, 256)),
+    dict(type='CenterCrop', crop_size=224),
     dict(type='Flip', flip_ratio=0),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='FormatShape', input_format='NCHW'),
@@ -69,14 +80,14 @@ val_pipeline = [
 ]
 test_pipeline = [
     dict(
-        type='COPSampleFrames',
-        num_clips=num_clips,
-        clip_len=clip_len,  # frames / clip
-        clip_interval=clip_interval,
-        frame_interval=frame_interval),
+        type='SampleFrames',
+        clip_len=1,
+        frame_interval=1,
+        num_clips=8,
+        test_mode=True),
     dict(type='RawFrameDecode'),
-    dict(type='Resize', scale=(128, -1)),
-    dict(type='CenterCrop', crop_size=crop_size),
+    dict(type='Resize', scale=(-1, 256)),
+    dict(type='CenterCrop', crop_size=224),
     dict(type='Flip', flip_ratio=0),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='FormatShape', input_format='NCHW'),
@@ -84,40 +95,34 @@ test_pipeline = [
     dict(type='ToTensor', keys=['imgs'])
 ]
 data = dict(
-    videos_per_gpu=6,  # 여기가 gpu당 batch size임, source+target 한 번에 넣는 거라서 배치 사이즈 반절
+    videos_per_gpu=12,  # 여기가 gpu당 batch size임, source+target 한 번에 넣는 거라서 배치 사이즈 반절
     workers_per_gpu=4,
     val_dataloader=dict(videos_per_gpu=20),
     train=[
         dict(
-            type='COPRawframeDataset',  # Note this is not Contrastive- one
-            num_clips=3,
+            type='RawframeDataset',
             ann_file=ann_file_train_source,
             data_prefix=data_prefix_source,
             start_index=1,  # frame number starts with
             filename_tmpl='img_{:05}.jpg',
-            sample_by_class=True,
             pipeline=train_pipeline),
         dict(
-            type='COPRawframeDataset',
-            num_clips=3,
+            type='RawframeDataset',
             ann_file=ann_file_train_target,
             data_prefix=data_prefix_target,
             start_index=1,
             filename_tmpl='img_{:05}.jpg',
-            sample_by_class=True,
             pipeline=train_pipeline),
     ],
     val=dict(
-        type='COPRawframeDataset',
-        num_clips=3,
+        type='RawframeDataset',
         ann_file=ann_file_valid_target,
         data_prefix=data_prefix_target,
         start_index=1,
         filename_tmpl='img_{:05}.jpg',
         pipeline=val_pipeline),
     test=dict(
-        type='COPRawframeDataset',
-        num_clips=3,
+        type='RawframeDataset',
         ann_file=ann_file_test_target,
         data_prefix=data_prefix_target,
         start_index=1,
@@ -135,25 +140,25 @@ optimizer = dict(
 optimizer_config = dict(grad_clip=dict(max_norm=20, norm_type=2))
 # learning policy
 lr_config = dict(
-    policy='step', step=[20, 40],
+    policy='step', step=[20, 40]
 )
-total_epochs = 300
-checkpoint_config = dict(interval=50)
+total_epochs = 50
+checkpoint_config = dict(interval=10)
 evaluation = dict(
-    interval=5,
+    interval=10,
     metrics=['top_k_accuracy', 'mean_class_accuracy', 'confusion_matrix'],  # valid, test 공용으로 사용
     save_best='mean_class_accuracy')
 log_config = dict(
     interval=10,  # every [ ] steps
     hooks=[
-        dict(type='TextLoggerHook'),
+        dict(type='TextLoggerHook'),#, by_epoch=False),
         dict(type='TensorboardLoggerHook'),
     ])
 annealing_runner = False
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = 'work_dirs/hello/ucf-hmdb/cop/x3d'
-load_from = None
+work_dir = 'work_dirs/hello/ucf-hmdb/DANN'
+load_from = 'work_dirs/hello/ucf101/vanilla/best_mean_class_accuracy_epoch_40.pth'
 resume_from = None
 workflow = [('train', 1)]

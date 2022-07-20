@@ -2,6 +2,13 @@ from pathlib import Path
 import re
 import argparse
 import pandas as pd
+import json
+
+# test cases
+# python slurm/utils/print_best_scores.py -d ucf2hmdb -m cop
+    # 특이사항: validation, test가 없어서 log.json의 mca값으로 best를 판단해야 함
+# python slurm/utils/print_best_scores.py -m gcd4da -p phase0 -t P02_P04 --abl one_way
+# python slurm/utils/print_best_scores.py -m gcd4da -p phase0 -t P02_P04 --abl one_way -o
 
 
 def main():
@@ -54,7 +61,7 @@ def main():
     if args.test:
         # for exp_dict in get_test_cases():
         #     print_info_from_config_vars_for_test(exp_dict)
-        return
+        raise NotImplementedError
     
     if args.jids:
         if args.one_line:
@@ -63,19 +70,19 @@ def main():
         else:
             print_df_from_jids(args.jids, ignore_old_models=args.ignore_old_models)
     elif args.model:
+        exp_dict = {
+            'dataset': args.dataset,
+            'backbone': args.backbone,
+            'model': args.model,
+            'domain': args.domain,
+            'phase': args.phase,
+            'ablation': args.ablation,
+            'task': args.task,
+        }
         if args.one_line:
-            exp_dict = {
-                'dataset': args.dataset,
-                'backbone': args.backbone,
-                'model': args.model,
-                'domain': args.domain,
-                'phase': args.phase,
-                'task': args.task,
-                'ablation': args.ablation,
-            }
             print_info_from_config_vars_for_test(**exp_dict, select_model_by=args.select_model_by, ignore_old_models=args.ignore_old_models)
         else:
-            print_df_from_config_vars(args.dataset, args.backbone, args.model, args.domain, args.task, args.select_model_by, args.ignore_old_models)
+            print_df_from_config_vars(**exp_dict, select_model_by=args.select_model_by, ignore_old_models=args.ignore_old_models)
 
 
 def print_df_from_jids(jids, ignore_old_models=False):
@@ -94,13 +101,17 @@ def print_df_from_jids(jids, ignore_old_models=False):
         print(df)
 
 
-def print_df_from_config_vars(dataset, backbone, model, domain=None, task=None, select_model_by='mca', ignore_old_models=False):
-    p_train_workdirs = Path(r'work_dirs/train_output')
-    p_target_workdir_parent = p_train_workdirs / dataset / backbone / model
-    if domain and model == 'vanilla':
-        p_target_workdir_parent /= domain
-    if task:
-        p_target_workdir_parent /= task
+def print_df_from_config_vars(
+    dataset,
+    backbone,
+    model,
+    domain=None,
+    phase=None,
+    ablation=None,
+    task=None,
+    select_model_by='mca', ignore_old_models=False
+):
+    p_target_workdir_parent = get_validated_p_target_workdir(dataset, backbone, model, domain, phase, ablation, task)
     pattern = r'\d+__[^/]*$'
     df_list = []
     for p_target_workdir in [p for p in p_target_workdir_parent.glob('**/*') if p.is_dir() and re.search(pattern, str(p))]:
@@ -114,25 +125,34 @@ def print_df_from_config_vars(dataset, backbone, model, domain=None, task=None, 
             indices = ['Dataset', 'Backbone', 'Model', 'Domain', 'Task']
             sort_by = ['Domain', 'Task', select_model_by.upper()]
             ascending = [True, True, False]
-            columns = ['ACC', 'MCA', 'UNK', 'JID'] if select_model_by == 'acc' else ['MCA', 'ACC', 'UNK', 'JID']
-            key = None
+            columns = ['ACC', 'MCA', 'JID'] if select_model_by == 'acc' else ['MCA', 'ACC', 'JID']
+            sort_key_func = None
         elif model == 'gcd4da':
             indices = ['Dataset', 'Backbone', 'Model', 'Phase', 'Task', 'Ablation']
             sort_by = ['Ablation', select_model_by.upper()]
             ascending = [True, False]
             columns = ['ACC', 'MCA', 'UNK', 'JID'] if select_model_by == 'acc' else ['MCA', 'ACC', 'UNK', 'JID']
-            key = None
+            if phase and phase == 'phase0':
+                columns.remove('UNK')
+            sort_key_func = None
         else:
             indices = ['Dataset', 'Backbone', 'Model', 'Task']
             sort_by = ['Task', select_model_by.upper()]
             ascending = [True, False]
             columns = ['ACC', 'MCA', 'UNK', 'JID'] if select_model_by == 'acc' else ['MCA', 'ACC', 'UNK', 'JID']
-            key = lambda column: column.map(lambda value: ''.join(value.split('_')[::-1])) if column.name == 'Task' else column  # if task, sort by its target domain
+            if any(kw in model for kw in ['cop', 'dann']): 
+                columns.remove('UNK')
+            sort_key_func = lambda column: column.map(lambda value: ''.join(value.split('_')[::-1])) if column.name == 'Task' else column  # if task, sort by its target domain
+        
+        if dataset != 'ek100':
+            indices.remove('Task')
+            sort_by.remove('Task')
+            ascending.remove(True)
         print(
             df
             .reset_index()
             .set_index(indices)
-            .sort_values(by=sort_by, ascending=ascending, key=key)[columns]
+            .sort_values(by=sort_by, ascending=ascending, key=sort_key_func)[columns]
         )
 
 def print_info_from_jid_for_test(jid):
@@ -151,21 +171,11 @@ def print_info_from_config_vars_for_test(
         model,
         domain,
         phase,
-        task,
         ablation,
+        task,
         select_model_by='mca', ignore_old_models=False
     ):
-    assert dataset and backbone and model and task
-    p_train_workdirs = Path(r'work_dirs/train_output')
-    if domain:  # vanilla
-        assert not (phase or ablation)
-        p_target_workdir_parent = p_train_workdirs / dataset / backbone / model / domain / task
-    elif phase or ablation:  # gcd4da
-        assert phase and ablation
-        p_target_workdir_parent = p_train_workdirs / dataset / backbone / model / phase / ablation / task
-    else:
-        p_target_workdir_parent = p_train_workdirs / dataset / backbone / model / task
-    assert p_target_workdir_parent.is_dir(), str(p_target_workdir_parent)
+    p_target_workdir_parent = get_validated_p_target_workdir(dataset, backbone, model, domain, phase, ablation, task)
         
     pattern = r'\d+__[^/]*$'
     infos = []
@@ -214,8 +224,11 @@ def get_best_info_by_target_workdir(p_target_workdir, select_model_by='mca', ign
         return jid
 
     if p_target_workdir: # for a single job
+        pattern = r'work_dirs/train_output/(?P<dataset>[\w-]+)/(?P<backbone>[\w-]+)/(?P<model>[\w-]+)/'
+        info = re.search(pattern, str(p_target_workdir)).groupdict()
+
         p_logs = list(p_target_workdir.glob('**/*.log'))
-        p_logs_and_score_dicts = [(p_log, get_test_scores_from_logfile(p_log)) for p_log in p_logs]
+        p_logs_and_score_dicts = [(p_log, get_test_scores_from_logfile(p_log, for_cop=info['model']=='cop')) for p_log in p_logs]
         p_logs_and_score_dicts = [(p_log, score_dict) for p_log, score_dict in p_logs_and_score_dicts if score_dict]  # drop jobs with no score
         if ignore_old_models:
             p_logs_and_score_dicts = [(p_log, score_dict) for p_log, score_dict in p_logs_and_score_dicts if p_log2jid(p_log) >= 19000]
@@ -224,20 +237,81 @@ def get_best_info_by_target_workdir(p_target_workdir, select_model_by='mca', ign
             arg_best = max(range(len(score_dicts)), key=lambda i: score_dicts[i][select_model_by])
             p_log = p_logs[arg_best]
             jid = p_log2jid(p_log)
+
             if 'vanilla' in str(p_log):
-                pattern = r'/(?P<dataset>[\w-]+)/(?P<backbone>[\w-]+)/(?P<model>[\w-]+)/(?P<domain>[\w-]+)/(?P<task>[\w-]+)/\d+__'
+                pattern += r'(?P<domain>[\w-]+)/'
             elif 'gcd4da' in str(p_log):
-                pattern = r'/(?P<dataset>[\w-]+)/(?P<backbone>[\w-]+)/(?P<model>[\w-]+)/(?P<phase>[\w-]+)/(?P<ablation>[\w-]+)/(?P<task>[\w-]+)/\d+__'
-            else:
-                pattern = r'/(?P<dataset>[\w-]+)/(?P<backbone>[\w-]+)/(?P<model>[\w-]+)/(?P<task>[\w-]+)/\d+__'
-            m = re.search(pattern, str(p_log))
-            info = m.groupdict()
+                pattern += r'(?P<phase>[\w-]+)/(?P<ablation>[\w-]+)/'
+            
+            if info['dataset'] == 'ek100':
+                pattern += r'(?P<task>[\w-]+)/'
+            pattern += r'\d+__'
+            
+            # if 'vanilla' in str(p_log):
+            #     pattern = r'/(?P<dataset>[\w-]+)/(?P<backbone>[\w-]+)/(?P<model>[\w-]+)/(?P<domain>[\w-]+)/(?P<task>[\w-]+)/\d+__'
+            # elif 'gcd4da' in str(p_log):
+            #     pattern = r'/(?P<dataset>[\w-]+)/(?P<backbone>[\w-]+)/(?P<model>[\w-]+)/(?P<phase>[\w-]+)/(?P<ablation>[\w-]+)/(?P<task>[\w-]+)/\d+__'
+            # elif 'cop' in str(p_log):
+            #     pattern = r'/(?P<dataset>[\w-]+)/(?P<backbone>[\w-]+)/(?P<model>[\w-]+)/\d+__'
+            # else:
+            #     pattern = r'/(?P<dataset>[\w-]+)/(?P<backbone>[\w-]+)/(?P<model>[\w-]+)/(?P<task>[\w-]+)/\d+__'
+            # m = re.search(pattern, str(p_log))
+            
+            info = re.search(pattern, str(p_log)).groupdict()
             info.update(score_dicts[arg_best])
             info['jid'] = jid
-            info['ckpt'] = str([p for p in p_log.parent.glob('*.pth') if 'best' in str(p)][0])
+            info['ckpt'] = str([p for p in p_log.parent.glob('*.pth') if ('latest' if info['model']=='cop' else 'best') in str(p)][0])
             info['config'] = str(next(p_log.parent.glob('*.py')))
             return info
     return None
+
+
+def get_validated_p_target_workdir(
+    dataset,
+    backbone,
+    model,
+
+    domain,  # for vanilla
+    phase, ablation,  # for gcd4da
+
+    task,
+    one_line=False,
+):
+    p_train_workdirs = Path(r'work_dirs/train_output')
+    assert dataset and backbone and model
+    assert dataset != 'ek100' or task  # if dataset is ek100, task required
+
+    p_target_workdir_parent = p_train_workdirs / dataset / backbone / model
+
+    # for ek100
+        # vanilla: p_train_workdirs / dataset / backbone / model / domain / task
+        # gcd4da:  p_train_workdirs / dataset / backbone / model / phase / ablation / task
+        # else:    p_train_workdirs / dataset / backbone / model / task
+
+    # for ucf2hmdb, hmdb2ucf
+        # vanilla: p_train_workdirs / dataset / backbone / model / domain
+        # gcd4da:  p_train_workdirs / dataset / backbone / model / phase / ablation
+        # else:    p_train_workdirs / dataset / backbone / model
+
+    if model == 'vanilla':
+        if one_line:
+            assert domain, 'vanilla needs domain for one-line mode'
+        assert not (phase or ablation), '`phase` nor `ablation` should not be provided with `domain`'
+        if domain:
+            p_target_workdir_parent /= domain
+    elif model == 'gcd4da':
+        if one_line:
+            assert phase and ablation, 'provide both `phase` and `ablation` for one-line mode'
+        if phase:
+            p_target_workdir_parent /= phase
+        if ablation:
+            p_target_workdir_parent /= ablation
+
+    if task:
+        p_target_workdir_parent /= task
+
+    assert p_target_workdir_parent.is_dir(), f'{str(p_target_workdir_parent)} is not a directory'
+    return p_target_workdir_parent
 
 
 def get_p_target_workdir_with_jid(p_workdirs, jid: str):
@@ -248,16 +322,27 @@ def get_p_target_workdir_with_jid(p_workdirs, jid: str):
     return p_target_workdir
 
 
-def get_test_scores_from_logfile(p_log):
-    with p_log.open('r') as f:
-        data = f.read()
-    # [\w\W]: work-around for matching all characters including new-line
-    pattern = r'Testing results of the best checkpoint[\w\W]*top1_acc: (?P<acc>[\d\.]+)[\w\W]*mean_class_accuracy: (?P<mca>[\d\.]+)([\w\W]*recall_unknown: (?P<unk>[\d\.]+))?'
-    found = re.search(pattern, data)
-    if found:
-        test_scores = found.groupdict()
-    else:  # still training or failed
-        test_scores = None
+def get_test_scores_from_logfile(p_log, for_cop=False):
+    if for_cop:
+        with p_log.with_name(p_log.name + '.json').open('r') as f:
+            data = f.read()
+            string = '{ "data": [' + ','.join(data.strip().split('\n')) + '] }'
+            data = json.loads(string)['data'][-1]  # last train log
+        test_scores = {
+            'acc': data['top1_acc'],
+            'mca': data['mca'],
+            'unk': None,
+        }
+    else:
+        with p_log.open('r') as f:
+            data = f.read()
+        # [\w\W]: work-around for matching all characters including new-line
+        pattern = r'Testing results of the best checkpoint[\w\W]*top1_acc: (?P<acc>[\d\.]+)[\w\W]*mean_class_accuracy: (?P<mca>[\d\.]+)([\w\W]*recall_unknown: (?P<unk>[\d\.]+))?'
+        found = re.search(pattern, data)
+        if found:
+            test_scores = found.groupdict()
+        else:  # still training or failed
+            test_scores = None
     return test_scores
 
 

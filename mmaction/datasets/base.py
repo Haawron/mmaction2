@@ -235,8 +235,8 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
                 cls_cnt = cf_mat.sum(axis=1)
                 cls_hit = np.diag(cf_mat)
                 cls_acc = np.array([hit / cnt if cnt else 0.0 for cnt, hit in zip(cls_cnt, cls_hit)])
-                os, unk = cls_acc[:-1].mean(), cls_acc[-1]
-                H_mean_acc = 2 * os * unk / (os + unk)
+                OS, unk = cls_acc[:-1].mean(), cls_acc[-1]
+                H_mean_acc = 2 * OS * unk / (OS + unk)
                 eval_results['H_mean_class_accuracy'] = H_mean_acc
                 log_msg = f'\nH_mean_acc\t{H_mean_acc:.4f}'
                 print_log(log_msg, logger=logger)
