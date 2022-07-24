@@ -168,6 +168,6 @@ annealing_runner = False
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
 work_dir = 'work_dirs/hello/ucf2hmdb/tsm/cop'
-load_from = None
+load_from = 'https://download.openmmlab.com/mmaction/recognition/tsm/tsm_r50_256p_1x1x8_50e_kinetics400_rgb/tsm_r50_256p_1x1x8_50e_kinetics400_rgb_20200726-020785e2.pth'
 resume_from = None
 workflow = [('train', 1)]

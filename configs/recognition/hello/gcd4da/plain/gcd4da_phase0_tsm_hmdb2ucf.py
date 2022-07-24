@@ -8,7 +8,7 @@ model = dict(
     contrastive=True,  # if True, don't shuffle the chosen batch
     backbone=dict(
         type='ResNetTSM',
-        pretrained='torchvision://resnet50',
+        pretrained=None,
         depth=50,
         num_segments=8,
         norm_eval=False,
@@ -27,11 +27,13 @@ model = dict(
         num_features=512,
         num_segments=8,
 
+        # 이거 그대로 써도 되겠다
+        # hsic=0이면 그냥 contrastive만 하는 거잖슴
         debias=False,
         bias_input=False,
         bias_network=False,
         debias_last=True, 
-        hsic_factor=.01,
+        hsic_factor=0,
 
         spatial_type='avg',
         consensus=dict(type='AvgConsensus', dim=1),
@@ -41,12 +43,12 @@ model = dict(
     test_cfg=dict(average_clips='prob'))  # None: prob - prob, score - -distance, None - feature
 # model training and testing settings
 # dataset settings
-data_prefix_source = '/local_datasets/ucf101/rawframes'
-data_prefix_target = '/local_datasets/hmdb51/rawframes'
-ann_file_train_source = 'data/_filelists/ucf101/filelist_ucf_train_closed.txt'
-ann_file_train_target = 'data/_filelists/hmdb51/filelist_hmdb_train_open.txt'
-ann_file_valid_target = 'data/_filelists/hmdb51/filelist_hmdb_val_closed.txt'
-ann_file_test_target = 'data/_filelists/hmdb51/filelist_hmdb_test_closed.txt'
+data_prefix_source = '/local_datasets/hmdb51/rawframes'
+data_prefix_target = '/local_datasets/ucf101/rawframes'
+ann_file_train_source = 'data/_filelists/hmdb51/filelist_hmdb_train_closed.txt'
+ann_file_train_target = 'data/_filelists/ucf101/filelist_ucf_train_open.txt'
+ann_file_valid_target = 'data/_filelists/ucf101/filelist_ucf_val_closed.txt'
+ann_file_test_target = 'data/_filelists/ucf101/filelist_ucf_test_closed.txt'
 img_norm_cfg = dict(
     mean=[128., 128., 128.], std=[50., 50., 50.], to_bgr=False)
 train_pipeline = [
@@ -171,7 +173,7 @@ annealing_runner = False
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = 'work_dirs/hello/ucf-hmdb/gcd4da'
-load_from = 'work_dirs/hello/ucf101/vanilla/best_mean_class_accuracy_epoch_40.pth'
+work_dir = 'work_dirs/hello/ucf2hmdb/tsm/gcd4da'
+load_from = 'work_dirs/train_output/ucf2hmdb/tsm/vanilla/target-only/3512__tsm-ucf-vanilla-target-only/1/20220722-020010/best_mean_class_accuracy_epoch_20.pth'
 resume_from = None
 workflow = [('train', 1)]

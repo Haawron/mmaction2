@@ -1,37 +1,52 @@
 # model settings
 num_classes = 12
 
-domain_adaptation = False
+domain_adaptation = True
 
 model = dict(
-    type='Recognizer2D',
+    type='DARecognizer2d',
+    contrastive=True,  # if True, don't shuffle the chosen batch
     backbone=dict(
         type='ResNetTSM',
         pretrained='torchvision://resnet50',
-        # pretrained=None,
         depth=50,
         num_segments=8,
         norm_eval=False,
         shift_div=8),
     cls_head=dict(
-        type='TSMHead',
+        type='ContrastiveDATSMHead',
+        loss_cls=dict(
+            type='SemisupervisedContrastiveLoss',
+            num_classes=num_classes,  # gonna be $k$
+            unsupervised=True,
+            loss_ratio=.35,
+            tau=1.),
         num_classes=num_classes,
-        num_segments=8,
         in_channels=2048,
+        num_layers=1,
+        num_features=512,
+        num_segments=8,
+
+        debias=False,
+        bias_input=False,
+        bias_network=False,
+        debias_last=True, 
+        hsic_factor=.01,
+
         spatial_type='avg',
         consensus=dict(type='AvgConsensus', dim=1),
-        dropout_ratio=0.5,
+        dropout_ratio=0.1,
         init_std=0.001,
         is_shift=True),
-    test_cfg=dict(average_clips='score'))
+    test_cfg=dict(average_clips='prob'))  # None: prob - prob, score - -distance, None - feature
 # model training and testing settings
 # dataset settings
-data_prefix = '/local_datasets/ucf101/rawframes'
-ann_file_train = 'data/_filelists/ucf101/filelist_ucf_train_closed.txt'
-ann_file_valid = 'data/_filelists/ucf101/filelist_ucf_val_closed.txt'
-ann_file_test  = 'data/_filelists/ucf101/filelist_ucf_test_closed.txt'
-# img_norm_cfg = dict(
-#     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_bgr=False)
+data_prefix_source = '/local_datasets/ucf101/rawframes'
+data_prefix_target = '/local_datasets/hmdb51/rawframes'
+ann_file_train_source = 'data/_filelists/ucf101/filelist_ucf_train_closed.txt'
+ann_file_train_target = 'data/_filelists/hmdb51/filelist_hmdb_train_open.txt'
+ann_file_valid_target = 'data/_filelists/hmdb51/filelist_hmdb_val_closed.txt'
+ann_file_test_target = 'data/_filelists/hmdb51/filelist_hmdb_test_closed.txt'
 img_norm_cfg = dict(
     mean=[128., 128., 128.], std=[50., 50., 50.], to_bgr=False)
 train_pipeline = [
@@ -46,7 +61,8 @@ train_pipeline = [
         max_wh_scale_gap=1,
         num_fixed_crops=13),
     dict(type='Resize', scale=(224, 224), keep_ratio=False),
-    dict(type='Flip', flip_ratio=0.5),
+    dict(type='Flip', flip_ratio=.5),
+    dict(type='ColorJitter', hue=.5),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='FormatShape', input_format='NCHW'),
     dict(type='Collect', keys=['imgs', 'label'], meta_keys=[]),
@@ -85,27 +101,38 @@ test_pipeline = [
     dict(type='ToTensor', keys=['imgs'])
 ]
 data = dict(
-    videos_per_gpu=24,
+    videos_per_gpu=6,  # 여기가 gpu당 batch size임, source+target 한 번에 넣는 거라서 배치 사이즈 반절
     workers_per_gpu=4,
-    val_dataloader=dict(videos_per_gpu=2),
-    train=dict(
-        type='RawframeDataset',
-        ann_file=ann_file_train,
-        data_prefix=data_prefix,
-        start_index=1,  # frame number starts with
-        filename_tmpl='img_{:05}.jpg',
-        pipeline=train_pipeline),
+    val_dataloader=dict(videos_per_gpu=20),
+    train=[
+        dict(
+            type='ContrastiveRawframeDataset',
+            ann_file=ann_file_train_source,
+            data_prefix=data_prefix_source,
+            start_index=1,  # frame number starts with
+            filename_tmpl='img_{:05}.jpg',
+            sample_by_class=True,
+            pipeline=train_pipeline),
+        dict(
+            type='ContrastiveRawframeDataset',
+            ann_file=ann_file_train_target,
+            data_prefix=data_prefix_target,
+            start_index=1,
+            filename_tmpl='img_{:05}.jpg',
+            sample_by_class=True,
+            pipeline=train_pipeline),
+    ],
     val=dict(
         type='RawframeDataset',
-        ann_file=ann_file_valid,
-        data_prefix=data_prefix,
+        ann_file=ann_file_valid_target,
+        data_prefix=data_prefix_target,
         start_index=1,
         filename_tmpl='img_{:05}.jpg',
         pipeline=val_pipeline),
     test=dict(
         type='RawframeDataset',
-        ann_file=ann_file_test,
-        data_prefix=data_prefix,
+        ann_file=ann_file_test_target,
+        data_prefix=data_prefix_target,
         start_index=1,
         filename_tmpl='img_{:05}.jpg',
         pipeline=test_pipeline)
@@ -114,33 +141,37 @@ data = dict(
 optimizer = dict(
     type='SGD',
     constructor='TSMOptimizerConstructor',
-    paramwise_cfg=dict(fc_lr5=True),
+    paramwise_cfg=dict(fc_lr5=False),
     lr=4 * 1e-3,
     momentum=0.9,
     weight_decay=0.0001)
 optimizer_config = dict(grad_clip=dict(max_norm=20, norm_type=2))
 # learning policy
 lr_config = dict(
-    policy='step', step=[20, 40]
+    policy='step', step=[20, 40],
+    # warmup
+    warmup='linear',
+    warmup_by_epoch=True,
+    warmup_iters=5,
+    warmup_ratio=0.1,  # start from [ratio * base_lr]
 )
 total_epochs = 50
 checkpoint_config = dict(interval=10)
 evaluation = dict(
-    interval=10,
+    interval=5,
     metrics=['top_k_accuracy', 'mean_class_accuracy', 'confusion_matrix'],  # valid, test 공용으로 사용
     save_best='mean_class_accuracy')
 log_config = dict(
-    interval=8,  # every [ ] steps
+    interval=10,  # every [ ] steps
     hooks=[
-        dict(type='TextLoggerHook'),#, by_epoch=False),
+        dict(type='TextLoggerHook'),
         dict(type='TensorboardLoggerHook'),
     ])
 annealing_runner = False
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = 'work_dirs/hello/ucf101/vanilla'
-# load_from = 'https://download.openmmlab.com/mmaction/recognition/tsm/tsm_r50_256p_1x1x8_50e_kinetics400_rgb/tsm_r50_256p_1x1x8_50e_kinetics400_rgb_20200726-020785e2.pth'
-load_from = ''
+work_dir = 'work_dirs/hello/ucf-hmdb/gcd4da'
+load_from = 'work_dirs/hello/ucf101/vanilla/best_mean_class_accuracy_epoch_40.pth'
 resume_from = None
 workflow = [('train', 1)]

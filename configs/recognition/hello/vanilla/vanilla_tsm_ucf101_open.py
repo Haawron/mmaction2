@@ -1,5 +1,5 @@
 # model settings
-num_classes = 12
+num_classes = 13
 
 domain_adaptation = False
 
@@ -26,10 +26,10 @@ model = dict(
     test_cfg=dict(average_clips='score'))
 # model training and testing settings
 # dataset settings
-data_prefix = '/local_datasets/hmdb51/rawframes'
-ann_file_train = 'data/_filelists/hmdb51/filelist_hmdb_train_closed.txt'
-ann_file_valid = 'data/_filelists/hmdb51/filelist_hmdb_val_closed.txt'
-ann_file_test  = 'data/_filelists/hmdb51/filelist_hmdb_test_closed.txt'
+data_prefix = '/local_datasets/ucf101/rawframes'
+ann_file_train = 'data/_filelists/ucf101/filelist_ucf_train_open.txt'
+ann_file_valid = 'data/_filelists/ucf101/filelist_ucf_val_open.txt'
+ann_file_test  = 'data/_filelists/ucf101/filelist_ucf_test_open.txt'
 # img_norm_cfg = dict(
 #     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_bgr=False)
 img_norm_cfg = dict(
@@ -130,7 +130,7 @@ evaluation = dict(
     metrics=['top_k_accuracy', 'mean_class_accuracy', 'confusion_matrix'],  # valid, test 공용으로 사용
     save_best='mean_class_accuracy')
 log_config = dict(
-    interval=7,  # every [ ] steps
+    interval=8,  # every [ ] steps
     hooks=[
         dict(type='TextLoggerHook'),#, by_epoch=False),
         dict(type='TensorboardLoggerHook'),
@@ -139,7 +139,7 @@ annealing_runner = False
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = 'work_dirs/hello/hmdb51/vanilla'
-load_from = ''
+work_dir = 'work_dirs/hello/ucf101/vanilla'
+load_from = 'https://download.openmmlab.com/mmaction/recognition/tsm/tsm_r50_256p_1x1x8_50e_kinetics400_rgb/tsm_r50_256p_1x1x8_50e_kinetics400_rgb_20200726-020785e2.pth'
 resume_from = None
 workflow = [('train', 1)]

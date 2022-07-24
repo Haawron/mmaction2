@@ -24,7 +24,7 @@ def main():
     n_tries = 5
 
     p_root = args.root_dir
-    source, target = re.findall(r'/([\w^_]{1,4})[_-]([\w^_]{1,4})/', str(p_root))[0] or [('P02', 'P04')]
+    source, target = re.findall(r'/([\w^_]{1,4})[2_-]([\w^_]{1,4})/', str(p_root))[0] or [('P02', 'P04')]
     print(f'Task: {source} -> {target}')
     num_classes = (
         5 if 'P' in source else
@@ -36,11 +36,11 @@ def main():
         print(f'{key:12s}\t{anns[key].shape} {Xs[key].shape}')
 
     print(f'\nTraining k-means models n_tries={n_tries} ...', end=' ')
-    global_best_model, ks, rows_os, rows_os_star, rows_unk = train_wrapper(Xs, anns, num_classes, n_tries)
+    global_best_model, ks, rows_H, rows_os, rows_os_star, rows_unk = train_wrapper(Xs, anns, num_classes, n_tries)
     print('done\n')
 
-    mi_columns = pd.MultiIndex.from_product([['train_source', 'train_target', 'valid', 'test'], ['OS', 'OS*', 'UNK']], names=['split', 'mode'])
-    records = {k: sum([[row_os[key], row_os_star[key], row_unk[key]] for key in row_os.keys()], []) for k, row_os, row_os_star, row_unk in zip(ks, rows_os, rows_os_star, rows_unk)}
+    mi_columns = pd.MultiIndex.from_product([['train_source', 'train_target', 'valid', 'test'], ['H', 'OS', 'OS*', 'UNK']], names=['split', 'mode'])
+    records = {k: sum([[row_H[key], row_os[key], row_os_star[key], row_unk[key]] for key in row_os.keys()], []) for k, row_H, row_os, row_os_star, row_unk in zip(ks, rows_H, rows_os, rows_os_star, rows_unk)}
     df = pd.DataFrame.from_dict(records, columns=mi_columns, orient='index')
     with pd.option_context('display.precision', 1):
         print(df)
@@ -139,27 +139,33 @@ def train_wrapper(Xs, anns, num_classes=5, n_tries=20):
                 'num_classes': num_classes,
             })
     results = {k: {'scores_os': {'test': 0}} for k in ks}
+    # results = {k: {'scores_H': {'test': 0}} for k in ks}  # init 
     with Pool() as p:
-        for model, k, scores_os, scores_os_star, scores_unk in p.imap_unordered(worker, jobs):
+        for model, k, scores_H, scores_os, scores_os_star, scores_unk in p.imap_unordered(worker, jobs):
             if results[k]['scores_os']['test'] < scores_os['test']:
+            # if results[k]['scores_H']['test'] <= scores_H['test']:
                 results[k] = {
                     'model': model,
+                    'scores_H': scores_H,
                     'scores_os': scores_os,
                     'scores_os_star': scores_os_star,
                     'scores_unk': scores_unk,
                 }
     p.join()
 
-    rows_os, rows_os_star, rows_unk = [], [], []
+    rows_H, rows_os, rows_os_star, rows_unk = [], [], [], []
     for k in ks:
+        rows_H.append(results[k]['scores_H'])
         rows_os.append(results[k]['scores_os'])
         rows_os_star.append(results[k]['scores_os_star'])
         rows_unk.append(results[k]['scores_unk'])
     global_best_k = max(ks, key=lambda k: results[k]['scores_os']['test'])
     global_best_test_score = results[global_best_k]['scores_os']['test']
+    # global_best_k = max(ks, key=lambda k: results[k]['scores_H']['test'])
+    # global_best_test_score = results[global_best_k]['scores_H']['test']
     global_best_model = results[global_best_k]['model']
     print(f'\nbest test score {global_best_test_score:.1f} at k={global_best_k}')
-    return global_best_model, ks, rows_os, rows_os_star, rows_unk
+    return global_best_model, ks, rows_H, rows_os, rows_os_star, rows_unk
 
 
 def worker(job:dict):
@@ -168,10 +174,11 @@ def worker(job:dict):
 
 def train(k, Xs, anns, num_classes):
     model = get_semi_kmeans_model(k, Xs, anns, num_classes)
+    scores_H = get_model_score(model, Xs, anns, num_classes, 'H', False)
     scores_os = get_model_score(model, Xs, anns, num_classes, 'os', False)  # score dict for each split
     scores_os_star = get_model_score(model, Xs, anns, num_classes, 'os*', False)
     scores_unk = get_model_score(model, Xs, anns, num_classes, 'unk', False)
-    return model, k, scores_os, scores_os_star, scores_unk
+    return model, k, scores_H, scores_os, scores_os_star, scores_unk
 
 
 def cosine(X, y, norm_X=None):
@@ -239,6 +246,10 @@ def get_model_score(model, Xs, anns, num_classes=5, mode='os', verbose=True):
         recalls = conf.diagonal() / conf.sum(axis=1)
         score = 100 * (
             recalls[:num_classes].mean() if mode == 'os*'
+            else (
+                0 if len(recalls) == num_classes or recalls[:num_classes].mean() * recalls[num_classes] == 0
+                else 2 / ((1 / recalls[:num_classes].mean()) + (1 / recalls[num_classes]))
+            )  if mode == 'H'
             else np.NaN if split_name == 'train_source' and mode in ['os', 'unk']
             else recalls.mean() if mode == 'os'
             else recalls[num_classes].mean() if mode == 'unk'

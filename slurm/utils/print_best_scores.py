@@ -1,11 +1,13 @@
 from pathlib import Path
 import re
 import argparse
+from cv2 import sort
 import pandas as pd
 import json
 
 # test cases
 # python slurm/utils/print_best_scores.py -d ucf2hmdb -m cop
+# python slurm/utils/print_best_scores.py -d ucf2hmdb -m 'cop-from-k400'
     # 특이사항: validation, test가 없어서 log.json의 mca값으로 best를 판단해야 함
 # python slurm/utils/print_best_scores.py -m gcd4da -p phase0 -t P02_P04 --abl one_way
 # python slurm/utils/print_best_scores.py -m gcd4da -p phase0 -t P02_P04 --abl one_way -o
@@ -46,6 +48,8 @@ def main():
                         help='')
     parser.add_argument('-dom', '--domain', default=None,
                         help='')
+    parser.add_argument('-db', '--debias', default=None,
+                        help='')
     parser.add_argument('-ph', '--phase', default=None,
                         help='')
     parser.add_argument('-t', '--task', default=None,
@@ -75,6 +79,7 @@ def main():
             'backbone': args.backbone,
             'model': args.model,
             'domain': args.domain,
+            'debias': args.debias,
             'phase': args.phase,
             'ablation': args.ablation,
             'task': args.task,
@@ -106,12 +111,13 @@ def print_df_from_config_vars(
     backbone,
     model,
     domain=None,
+    debias=None,
     phase=None,
     ablation=None,
     task=None,
     select_model_by='mca', ignore_old_models=False
 ):
-    p_target_workdir_parent = get_validated_p_target_workdir(dataset, backbone, model, domain, phase, ablation, task)
+    p_target_workdir_parent = get_validated_p_target_workdir(dataset, backbone, model, domain, debias, phase, ablation, task)
     pattern = r'\d+__[^/]*$'
     df_list = []
     for p_target_workdir in [p for p in p_target_workdir_parent.glob('**/*') if p.is_dir() and re.search(pattern, str(p))]:
@@ -128,7 +134,7 @@ def print_df_from_config_vars(
             columns = ['ACC', 'MCA', 'JID'] if select_model_by == 'acc' else ['MCA', 'ACC', 'JID']
             sort_key_func = None
         elif model == 'gcd4da':
-            indices = ['Dataset', 'Backbone', 'Model', 'Phase', 'Task', 'Ablation']
+            indices = ['Dataset', 'Backbone', 'Model', 'Debias', 'Phase', 'Task', 'Ablation']
             sort_by = ['Ablation', select_model_by.upper()]
             ascending = [True, False]
             columns = ['ACC', 'MCA', 'UNK', 'JID'] if select_model_by == 'acc' else ['MCA', 'ACC', 'UNK', 'JID']
@@ -145,9 +151,16 @@ def print_df_from_config_vars(
             sort_key_func = lambda column: column.map(lambda value: ''.join(value.split('_')[::-1])) if column.name == 'Task' else column  # if task, sort by its target domain
         
         if dataset != 'ek100':
-            indices.remove('Task')
-            sort_by.remove('Task')
-            ascending.remove(True)
+            if model != 'vanilla':
+                indices.remove('Task')
+                if 'Task' in sort_by:
+                    sort_by.remove('Task')
+                    ascending.remove(True)
+            else:
+                indices.remove('Domain')
+                sort_by.remove('Domain')
+                ascending.remove(True)
+
         print(
             df
             .reset_index()
@@ -158,8 +171,6 @@ def print_df_from_config_vars(
 def print_info_from_jid_for_test(jid):
     info = get_best_info_from_jid(jid)
     if info:
-        # if vanilla: ['dataset', 'backbone', 'vanilla', 'domain', 'task', 'acc', 'mca', 'jid', 'ckpt', 'config']
-        # else:       ['dataset', 'backbone', 'model',             'task', 'acc', 'mca', 'jid', 'ckpt', 'config']
         print(' '.join(map(str, info.values())))
     else:
         exit(1)
@@ -169,13 +180,14 @@ def print_info_from_config_vars_for_test(
         dataset,
         backbone,
         model,
+
         domain,
-        phase,
-        ablation,
+        debias, phase, ablation,
+        
         task,
         select_model_by='mca', ignore_old_models=False
     ):
-    p_target_workdir_parent = get_validated_p_target_workdir(dataset, backbone, model, domain, phase, ablation, task)
+    p_target_workdir_parent = get_validated_p_target_workdir(dataset, backbone, model, domain, debias, phase, ablation, task)
         
     pattern = r'\d+__[^/]*$'
     infos = []
@@ -184,10 +196,8 @@ def print_info_from_config_vars_for_test(
         if info:
             infos.append(info)
     if infos:
-        #               input                                                               output
-        # if vanilla:  ['dataset', 'backbone', 'vanilla', 'domain',            'task',      'acc', 'mca', 'jid', 'ckpt', 'config']
-        # elif gcd4da: ['dataset', 'backbone', 'gcd4da',  'phase', 'ablation', 'task',      'acc', 'mca', 'jid', 'ckpt', 'config']
-        # else:        ['dataset', 'backbone', 'model',                        'task',      'acc', 'mca', 'jid', 'ckpt', 'config']
+        #  input                   output
+        # [captured_from_path      'acc', 'mca', 'jid', 'ckpt', 'config']
         best_info = max(infos, key=lambda info: info[select_model_by])
         print(' '.join(map(str, best_info.values())))
     else:
@@ -195,23 +205,11 @@ def print_info_from_config_vars_for_test(
     
 
 def get_best_info_from_jid(jid, select_model_by='mca'):
-    """The structure of the target workdir would be
-
-        if domain adapted:
-            p_workdirs / dataset / backbone / model / {source}__{target} / {jid}__{jobname} /
-                0/{time_job_submitted}/
-                    {time_training_begins}.log
-                1/...
-
-        else if source/target-only:
-            p_workdirs / dataset / backbone / model / domain / {"source-only" or "target-only"} / {jid}__{jobname} /
-                0/...
-                1/...
-
-        Returns:
-            jid, acc, source, target
-            Or
-            jid, acc, domain, {"source-only" or "target-only"}
+    """
+    Returns:
+        jid, acc, source, target
+        Or
+        jid, acc, domain, {"source-only" or "target-only"}
     """
     p_train_workdirs = Path(r'work_dirs/train_output')
     p_target_workdir = get_p_target_workdir_with_jid(p_train_workdirs, jid)
@@ -220,7 +218,7 @@ def get_best_info_from_jid(jid, select_model_by='mca'):
 
 def get_best_info_by_target_workdir(p_target_workdir, select_model_by='mca', ignore_old_models=False):
     def p_log2jid(p_log):
-        jid = int(re.findall(r'/(\d+)__', str(p_log))[0])
+        jid = '_'.join(re.findall(r'/(\d+)__[\w-]+/(\d+)/', str(p_log))[0])
         return jid
 
     if p_target_workdir: # for a single job
@@ -228,7 +226,7 @@ def get_best_info_by_target_workdir(p_target_workdir, select_model_by='mca', ign
         info = re.search(pattern, str(p_target_workdir)).groupdict()
 
         p_logs = list(p_target_workdir.glob('**/*.log'))
-        p_logs_and_score_dicts = [(p_log, get_test_scores_from_logfile(p_log, for_cop=info['model']=='cop')) for p_log in p_logs]
+        p_logs_and_score_dicts = [(p_log, get_test_scores_from_logfile(p_log, for_cop=('cop' in info['model']))) for p_log in p_logs]
         p_logs_and_score_dicts = [(p_log, score_dict) for p_log, score_dict in p_logs_and_score_dicts if score_dict]  # drop jobs with no score
         if ignore_old_models:
             p_logs_and_score_dicts = [(p_log, score_dict) for p_log, score_dict in p_logs_and_score_dicts if p_log2jid(p_log) >= 19000]
@@ -238,29 +236,20 @@ def get_best_info_by_target_workdir(p_target_workdir, select_model_by='mca', ign
             p_log = p_logs[arg_best]
             jid = p_log2jid(p_log)
 
-            if 'vanilla' in str(p_log):
+            if info['dataset'] == 'ek100' and 'vanilla' in info['model']:
                 pattern += r'(?P<domain>[\w-]+)/'
-            elif 'gcd4da' in str(p_log):
-                pattern += r'(?P<phase>[\w-]+)/(?P<ablation>[\w-]+)/'
+            elif 'gcd4da' in info['model']:
+                pattern += r'(?P<debias>[\w-]+)/(?P<phase>[\w-]+)/(?P<ablation>[\w-]+)/'
             
-            if info['dataset'] == 'ek100':
+            if info['dataset'] == 'ek100' or 'vanilla' in info['model']:
                 pattern += r'(?P<task>[\w-]+)/'
+
             pattern += r'\d+__'
-            
-            # if 'vanilla' in str(p_log):
-            #     pattern = r'/(?P<dataset>[\w-]+)/(?P<backbone>[\w-]+)/(?P<model>[\w-]+)/(?P<domain>[\w-]+)/(?P<task>[\w-]+)/\d+__'
-            # elif 'gcd4da' in str(p_log):
-            #     pattern = r'/(?P<dataset>[\w-]+)/(?P<backbone>[\w-]+)/(?P<model>[\w-]+)/(?P<phase>[\w-]+)/(?P<ablation>[\w-]+)/(?P<task>[\w-]+)/\d+__'
-            # elif 'cop' in str(p_log):
-            #     pattern = r'/(?P<dataset>[\w-]+)/(?P<backbone>[\w-]+)/(?P<model>[\w-]+)/\d+__'
-            # else:
-            #     pattern = r'/(?P<dataset>[\w-]+)/(?P<backbone>[\w-]+)/(?P<model>[\w-]+)/(?P<task>[\w-]+)/\d+__'
-            # m = re.search(pattern, str(p_log))
-            
+
             info = re.search(pattern, str(p_log)).groupdict()
             info.update(score_dicts[arg_best])
             info['jid'] = jid
-            info['ckpt'] = str([p for p in p_log.parent.glob('*.pth') if ('latest' if info['model']=='cop' else 'best') in str(p)][0])
+            info['ckpt'] = str([p for p in p_log.parent.glob('*.pth') if ('latest' if ('cop' in info['model']) else 'best') in str(p)][0])
             info['config'] = str(next(p_log.parent.glob('*.py')))
             return info
     return None
@@ -272,7 +261,7 @@ def get_validated_p_target_workdir(
     model,
 
     domain,  # for vanilla
-    phase, ablation,  # for gcd4da
+    debias, phase, ablation,  # for gcd4da
 
     task,
     one_line=False,
@@ -285,23 +274,28 @@ def get_validated_p_target_workdir(
 
     # for ek100
         # vanilla: p_train_workdirs / dataset / backbone / model / domain / task
-        # gcd4da:  p_train_workdirs / dataset / backbone / model / phase / ablation / task
+        # gcd4da:  p_train_workdirs / dataset / backbone / model / debias / phase / ablation / task
         # else:    p_train_workdirs / dataset / backbone / model / task
 
-    # for ucf2hmdb, hmdb2ucf
-        # vanilla: p_train_workdirs / dataset / backbone / model / domain
-        # gcd4da:  p_train_workdirs / dataset / backbone / model / phase / ablation
+    # for ucf2hmdb, hmdb2ucf, ...
+        # vanilla: p_train_workdirs / dataset / backbone / model / task
+        # gcd4da:  p_train_workdirs / dataset / backbone / model / debias / phase / ablation
         # else:    p_train_workdirs / dataset / backbone / model
 
     if model == 'vanilla':
         if one_line:
             assert domain, 'vanilla needs domain for one-line mode'
         assert not (phase or ablation), '`phase` nor `ablation` should not be provided with `domain`'
-        if domain:
+        if domain:  # only for ek100
             p_target_workdir_parent /= domain
     elif model == 'gcd4da':
         if one_line:
-            assert phase and ablation, 'provide both `phase` and `ablation` for one-line mode'
+            assert debias and phase and ablation, 'provide both `debias`, `phase` and `ablation` for one-line mode'
+        else:
+            assert not phase or debias  # if phase then debias
+            assert not ablation or phase  # if ablation then phase
+        if debias:
+            p_target_workdir_parent /= debias
         if phase:
             p_target_workdir_parent /= phase
         if ablation:
