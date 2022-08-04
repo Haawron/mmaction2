@@ -23,10 +23,10 @@ class SemisupervisedContrastiveLoss(BaseWeightedLoss):
         if self.unsupervised:
             N = cls_score.shape[0] // 4  # 2x views, source & target
             loss_super = self.loss(torch.stack([cls_score[:2*N:2], cls_score[1:2*N:2]], dim=1), label[:2*N:2])
-            # loss_unsuper = self.loss(torch.stack([cls_score[::2], cls_score[1::2]], dim=1))
-            loss_unsuper = self.loss(torch.stack([cls_score[:2*N:2], cls_score[1:2*N:2]], dim=1))  # source
-            loss_unsuper += self.loss(torch.stack([cls_score[2*N::2], cls_score[1+2*N::2]], dim=1))  # target
-            return {'loss_super': self.loss_ratio * loss_super, 'loss_unsuper': (1 - self.loss_ratio) * loss_unsuper}
+            # loss_selfsuper = self.loss(torch.stack([cls_score[::2], cls_score[1::2]], dim=1))
+            loss_selfsuper = self.loss(torch.stack([cls_score[:2*N:2], cls_score[1:2*N:2]], dim=1))  # source
+            loss_selfsuper += self.loss(torch.stack([cls_score[2*N::2], cls_score[1+2*N::2]], dim=1))  # target
+            return {'loss_super': self.loss_ratio * loss_super, 'loss_selfsuper': (1 - self.loss_ratio) * loss_selfsuper}
         else:
             # labels for target domains are pseudo-labels
             loss_super = self.loss(torch.stack([cls_score[::2], cls_score[1::2]], dim=1), label[::2])

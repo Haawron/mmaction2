@@ -1,12 +1,13 @@
 #!/bin/bash
 
-#SBATCH -J tsm-cop-hmdb2ucf
+#SBATCH -J cop-tsm-hmdb2ucf
 #SBATCH -p batch
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-gpu=4
 #SBATCH --mem-per-gpu=15G
 #SBATCH -t 4-0
 #SBATCH --array 1-2%2
+#SBATCH -x agi1,vll2
 #SBATCH -o slurm/logs/slurm-%A_%a-%x.out
 
 current_time=$(date +'%Y%m%d-%H%M%S')

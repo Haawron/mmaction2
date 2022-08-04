@@ -150,7 +150,7 @@ class RawframeDataset(BaseDataset):
                     assert self.num_classes is not None
                     video_info['label'] = label
                 else:
-                    assert len(label) == 1
+                    assert len(label) == 1, f'label: {label}, ann: {self.ann_file}'
                     video_info['label'] = label[0]
                 video_infos.append(video_info)
 
@@ -228,26 +228,18 @@ class COPRawframeDataset(RawframeDataset):
         results = super().prepare_test_frames(idx)
         return self._shuffle_and_relabel(results)
 
-    def _shuffle_and_relabel(self, results:dict):
+    def _shuffle_and_relabel(self, results:dict) -> dict:
         label = np.random.randint(factorial(self.num_clips))
-        # label = np.random.choice([0, 2], replace=False)
         clip_order = np.array(list(permutations(range(self.num_clips))))[label]
-        x = results['imgs']  # [num_clips*clip_len, C, H, W]
-        x = x.reshape(self.num_clips, -1, *x.shape[-3:])  # [num_clips, clip_len, C, H, W]
-        x = x[clip_order]  # [num_clips, clip_len, C, H, W]
-        x = x.reshape(-1, *x.shape[-3:])  # [num_clips*clip_len, C, H, W]
-
-        # from PIL import Image
-        # import os
-        # os.makedirs(f'tmp/{os.getpid()}_{"".join(map(str, clip_order))}', exist_ok=True)
-        # x -= x.min()
-        # x /= x.max()
-        # x *= 255
-        # for i, img in enumerate(x.permute(0, 2, 3, 1).detach().cpu().numpy()):
-        #     img = Image.fromarray(img.astype(np.uint8))
-        #     img.save(f'tmp/{os.getpid()}_{"".join(map(str, clip_order))}/{i:02d}.png')
-        # print(clip_order)
-        # exit()
+        x = results['imgs']
+        if x.dim() == 4:  # 2D based [num_clips*clip_len, C, H, W]
+            x = x.reshape(self.num_clips, -1, *x.shape[-3:])  # [num_clips, clip_len, C, H, W]
+            x = x[clip_order]  # [num_clips, clip_len, C, H, W]
+            x = x.reshape(-1, *x.shape[-3:])  # [num_clips*clip_len, C, H, W]
+        elif x.dim() == 5:  # 3D based [num_clips, C, clip_len, H, W] (NCTHW)
+            x = x[clip_order]
+        else:
+            raise NotImplementedError
 
         results['imgs'] = x
         results['label'] = label

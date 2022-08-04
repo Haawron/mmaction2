@@ -1,5 +1,5 @@
 # model settings
-num_classes = 12
+num_classes = 5
 
 domain_adaptation = True
 
@@ -43,12 +43,12 @@ model = dict(
     test_cfg=dict(average_clips='prob'))  # None: prob - prob, score - -distance, None - feature
 # model training and testing settings
 # dataset settings
-data_prefix_source = '/local_datasets/hmdb51/rawframes'
-data_prefix_target = '/local_datasets/ucf101/rawframes'
-ann_file_train_source = 'data/_filelists/hmdb51/filelist_hmdb_train_closed.txt'
-ann_file_train_target = 'data/_filelists/ucf101/filelist_ucf_train_open.txt'
-ann_file_valid_target = 'data/_filelists/ucf101/filelist_ucf_val_closed.txt'
-ann_file_test_target = 'data/_filelists/ucf101/filelist_ucf_test_closed.txt'
+data_prefix = '/local_datasets/epic-kitchens-100/EPIC-KITCHENS'
+ann_file_train_source = 'data/_filelists/ek100/filelist_P02_train_closed.txt'
+ann_file_train_target = 'data/_filelists/ek100/filelist_P02_valid_open.txt'
+# actually not used
+ann_file_valid_target = 'data/_filelists/ek100/filelist_P02_valid_closed.txt'
+ann_file_test_target = 'data/_filelists/ek100/filelist_P02_test_open.txt'
 img_norm_cfg = dict(
     mean=[128., 128., 128.], std=[50., 50., 50.], to_bgr=False)
 train_pipeline = [
@@ -110,33 +110,37 @@ data = dict(
         dict(
             type='ContrastiveRawframeDataset',
             ann_file=ann_file_train_source,
-            data_prefix=data_prefix_source,
+            data_prefix=data_prefix,
             start_index=1,  # frame number starts with
-            filename_tmpl='img_{:05}.jpg',
+            filename_tmpl='frame_{:010}.jpg',
             sample_by_class=True,
+            with_offset=True,
             pipeline=train_pipeline),
         dict(
             type='ContrastiveRawframeDataset',
             ann_file=ann_file_train_target,
-            data_prefix=data_prefix_target,
+            data_prefix=data_prefix,
             start_index=1,
-            filename_tmpl='img_{:05}.jpg',
+            filename_tmpl='frame_{:010}.jpg',
             sample_by_class=True,
+            with_offset=True,
             pipeline=train_pipeline),
     ],
     val=dict(
         type='RawframeDataset',
         ann_file=ann_file_valid_target,
-        data_prefix=data_prefix_target,
+        data_prefix=data_prefix,
         start_index=1,
-        filename_tmpl='img_{:05}.jpg',
+        filename_tmpl='frame_{:010}.jpg',
+        with_offset=True,
         pipeline=val_pipeline),
     test=dict(
         type='RawframeDataset',
         ann_file=ann_file_test_target,
-        data_prefix=data_prefix_target,
+        data_prefix=data_prefix,
         start_index=1,
-        filename_tmpl='img_{:05}.jpg',
+        filename_tmpl='frame_{:010}.jpg',
+        with_offset=True,
         pipeline=test_pipeline)
 )
 # optimizer
@@ -157,7 +161,7 @@ lr_config = dict(
     warmup_iters=5,
     warmup_ratio=0.1,  # start from [ratio * base_lr]
 )
-total_epochs = 50
+total_epochs = 200
 checkpoint_config = dict(interval=10)
 evaluation = dict(
     interval=5,
@@ -173,7 +177,7 @@ annealing_runner = False
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = 'work_dirs/hello/ucf2hmdb/tsm/gcd4da'
-load_from = 'work_dirs/train_output/hmdb2ucf/tsm/vanilla/source-only/4382__vanilla-tsm-hmdb2ucf-source-only/2/20220728-205928/best_mean_class_accuracy_epoch_30.pth'
+work_dir = 'work_dirs/hello/ek100/tsm/cdar-sanity/P02'
+load_from = 'work_dirs/train_output/ek100/tsm/vanilla/P02/source-only/16847__vanilla_tsm_P02_source-only/0/20220402-053842/best_mean_class_accuracy_epoch_30.pth'
 resume_from = None
 workflow = [('train', 1)]

@@ -1,5 +1,6 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 from abc import ABCMeta, abstractmethod
+from functools import reduce, partial
 
 import torch
 import torch.nn as nn
@@ -20,6 +21,21 @@ def get_fc_block(c_in, c_out, num_layers, dropout_ratio):
         dropout = nn.Dropout(p=dropout_ratio) if dropout_ratio > 0 else nn.Identity()
         act = nn.ReLU() if i < num_layers - 1 else nn.Identity()
         fc_block += [fc, dropout, act]
+    return nn.Sequential(*fc_block)
+
+
+def get_fc_block_by_channels(c_in, c_out, c_mids=[], dropout_ratio=.5):
+    def get_block(c_in, c_out, dropout_ratio=.5, act=True):
+        fc = nn.Linear(c_in, c_out)
+        dropout = nn.Dropout(p=dropout_ratio)
+        act = nn.ReLU() if act else nn.Identity()
+        return [fc, dropout, act]
+    fc_block = []
+    if c_mids:
+        fc_block += reduce(partial(get_block, dropout_ratio=dropout_ratio), [c_in] + c_mids)
+        fc_block += get_block(c_mids[-1], c_out, dropout_ratio, False)
+    else:
+        fc_block += get_block(c_in, c_out, dropout_ratio, False)
     return nn.Sequential(*fc_block)
 
 

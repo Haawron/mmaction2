@@ -21,7 +21,8 @@ lr="${lrs[SLURM_ARRAY_TASK_ID]}"
 N=$SLURM_GPUS_ON_NODE
 
 config=configs/recognition/hello/gcd4da/plain/gcd4da_phase0_tsm_hmdb2ucf.py
-ckpt=work_dirs/train_output/hmdb2ucf/tsm/cop-from-k400/2719__tsm-cop-hmdb2ucf-from-k400/1/20220715-195927/latest.pth
+# ckpt=work_dirs/train_output/hmdb2ucf/tsm/cop-from-k400/2719__tsm-cop-hmdb2ucf-from-k400/1/20220715-195927/latest.pth
+ckpt=work_dirs/train_output/hmdb2ucf/tsm/cop-from-k400/2719__tsm-cop-hmdb2ucf-from-k400/1/20220715-195927/epoch_900.pth
 workdir=work_dirs/train_output/hmdb2ucf/tsm/gcd4da/cop/phase0/one_way/${SLURM_ARRAY_JOB_ID}__${SLURM_JOB_NAME}/${SLURM_ARRAY_TASK_ID}/${current_time}
 
 OMP_NUM_THREADS=${N} MKL_NUM_THREADS=${N} torchrun --nproc_per_node=${N} --master_port=$((10000+$RANDOM%20000)) tools/train.py $config \

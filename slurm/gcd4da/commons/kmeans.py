@@ -117,10 +117,14 @@ def get_input_and_output(p_root, source, target, num_classes=5):
             p_root / f'features/{target}_test_open.pkl',
         ]
     ):
-        with p_feature.open('rb') as f:
-            X = pickle.load(f)
-            X = np.array(X)
-            Xs[split_name] = X
+        try:
+            f = p_feature.open('rb')
+        except FileNotFoundError:
+            f = p_feature.with_name(p_feature.name.replace('val', 'valid')).open('rb')
+        X = pickle.load(f)
+        X = np.array(X)
+        Xs[split_name] = X
+        f.close()
 
     Xs['train_source'] = Xs['train_source'][anns['train_source']<num_classes]
     anns['train_source'] = anns['train_source'][anns['train_source']<num_classes]
@@ -138,12 +142,12 @@ def train_wrapper(Xs, anns, num_classes=5, n_tries=20):
                 'anns': anns,
                 'num_classes': num_classes,
             })
-    results = {k: {'scores_os': {'test': 0}} for k in ks}
-    # results = {k: {'scores_H': {'test': 0}} for k in ks}  # init 
+    # results = {k: {'scores_os': {'test': 0}} for k in ks}
+    results = {k: {'scores_H': {'test': 0}} for k in ks}  # init 
     with Pool() as p:
         for model, k, scores_H, scores_os, scores_os_star, scores_unk in p.imap_unordered(worker, jobs):
-            if results[k]['scores_os']['test'] < scores_os['test']:
-            # if results[k]['scores_H']['test'] <= scores_H['test']:
+            # if results[k]['scores_os']['test'] < scores_os['test']:
+            if results[k]['scores_H']['test'] <= scores_H['test']:
                 results[k] = {
                     'model': model,
                     'scores_H': scores_H,
@@ -159,10 +163,10 @@ def train_wrapper(Xs, anns, num_classes=5, n_tries=20):
         rows_os.append(results[k]['scores_os'])
         rows_os_star.append(results[k]['scores_os_star'])
         rows_unk.append(results[k]['scores_unk'])
-    global_best_k = max(ks, key=lambda k: results[k]['scores_os']['test'])
-    global_best_test_score = results[global_best_k]['scores_os']['test']
-    # global_best_k = max(ks, key=lambda k: results[k]['scores_H']['test'])
-    # global_best_test_score = results[global_best_k]['scores_H']['test']
+    # global_best_k = max(ks, key=lambda k: results[k]['scores_os']['test'])
+    # global_best_test_score = results[global_best_k]['scores_os']['test']
+    global_best_k = max(ks, key=lambda k: results[k]['scores_H']['test'])
+    global_best_test_score = results[global_best_k]['scores_H']['test']
     global_best_model = results[global_best_k]['model']
     print(f'\nbest test score {global_best_test_score:.1f} at k={global_best_k}')
     return global_best_model, ks, rows_H, rows_os, rows_os_star, rows_unk

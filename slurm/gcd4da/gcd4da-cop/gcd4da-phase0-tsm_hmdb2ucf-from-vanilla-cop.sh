@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH -J gcd4da-phase0-tsm_ucf2hmdb-from-cop
+#SBATCH -J gcd4da-phase0-tsm_hmdb2ucf-from-vanilla-cop
 #SBATCH --gres=gpu:4
 #SBATCH -t 4-0
 #SBATCH -p batch
@@ -20,10 +20,9 @@ lr="${lrs[SLURM_ARRAY_TASK_ID]}"
 
 N=$SLURM_GPUS_ON_NODE
 
-config=configs/recognition/hello/gcd4da/plain/gcd4da_phase0_tsm_ucf2hmdb.py
-# ckpt=work_dirs/train_output/ucf2hmdb/tsm/cop-from-k400/2716__tsm-cop-ucf2hmdb-from-k400/2/20220715-195922/latest.pth
-ckpt=work_dirs/train_output/ucf2hmdb/tsm/cop-from-k400/2716__tsm-cop-ucf2hmdb-from-k400/2/20220715-195922/epoch_1200.pth
-workdir=work_dirs/train_output/ucf2hmdb/tsm/gcd4da/cop/phase0/one_way/${SLURM_ARRAY_JOB_ID}__${SLURM_JOB_NAME}/${SLURM_ARRAY_TASK_ID}/${current_time}
+config=configs/recognition/hello/gcd4da/plain/gcd4da_phase0_tsm_hmdb2ucf.py
+ckpt=work_dirs/train_output/hmdb2ucf/tsm/cop-from-vanilla/3879__cop-tsm-hmdb2ucf_from_vanilla/1/20220724-234609/epoch_1000.pth
+workdir=work_dirs/train_output/hmdb2ucf/tsm/gcd4da/vanilla-cop/phase0/one_way/${SLURM_ARRAY_JOB_ID}__${SLURM_JOB_NAME}/${SLURM_ARRAY_TASK_ID}/${current_time}
 
 OMP_NUM_THREADS=${N} MKL_NUM_THREADS=${N} torchrun --nproc_per_node=${N} --master_port=$((10000+$RANDOM%20000)) tools/train.py $config \
     --launcher pytorch \

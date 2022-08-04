@@ -8,6 +8,7 @@ from mmcv.cnn import build_conv_layer, build_norm_layer, kaiming_init
 from mmcv.cnn.bricks.transformer import build_transformer_layer_sequence
 from mmcv.cnn.utils.weight_init import trunc_normal_
 from mmcv.runner import _load_checkpoint, load_state_dict
+from mmcv.utils import _BatchNorm
 from torch.nn.modules.utils import _pair
 
 from ...utils import get_root_logger
@@ -107,6 +108,8 @@ class TimeSformer(nn.Module):
                  dropout_ratio=0.,
                  transformer_layers=None,
                  attention_type='divided_space_time',
+                 frozen_stages=8,
+                 norm_eval=False,
                  norm_cfg=dict(type='LN', eps=1e-6),
                  **kwargs):
         super().__init__(**kwargs)
@@ -120,6 +123,8 @@ class TimeSformer(nn.Module):
         self.embed_dims = embed_dims
         self.num_transformer_layers = num_transformer_layers
         self.attention_type = attention_type
+        self.frozen_stages = frozen_stages
+        self.norm_eval = norm_eval
 
         self.patch_embed = PatchEmbed(
             img_size=img_size,
@@ -283,3 +288,32 @@ class TimeSformer(nn.Module):
 
         # Return Class Token
         return x[:, 0]
+
+    def _freeze_stages(self):
+        """Prevent all the parameters from being optimized before
+        ``self.frozen_stages``."""
+        if self.frozen_stages >= 0:
+            self.cls_token.requires_grad = False
+            self.pos_embed.requires_grad = False
+            self.time_embed.requires_grad = False
+            self.drop_after_pos.eval()
+            self.drop_after_time.eval()
+            for param in self.patch_embed.parameters():
+                param.requires_grad = False
+            for param in self.norm.parameters():
+                param.requires_grad = False
+
+        for i in range(self.frozen_stages):
+            m = self.transformer_layers.layers[i]
+            m.eval()
+            for param in m.parameters():
+                param.requires_grad = False
+
+    def train(self, mode=True):
+        """Set the optimization status when training."""
+        super().train(mode)
+        self._freeze_stages()
+        if mode and self.norm_eval:
+            for m in self.modules():
+                if isinstance(m, _BatchNorm):
+                    m.eval()

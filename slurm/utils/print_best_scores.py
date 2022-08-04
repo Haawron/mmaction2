@@ -1,7 +1,6 @@
 from pathlib import Path
 import re
 import argparse
-from cv2 import sort
 import pandas as pd
 import json
 
@@ -126,21 +125,20 @@ def print_df_from_config_vars(
             df = info2df(info)
             df_list.append(df)
     df = pd.concat(df_list)
+    sort_ek100_task_by_target = lambda column: column.map(lambda value: ''.join(value.split('_')[::-1])) if column.name == 'Task' else column
     with pd.option_context('display.max_colwidth', None):  # more options can be specified also
         if model == 'vanilla':
             indices = ['Dataset', 'Backbone', 'Model', 'Domain', 'Task']
             sort_by = ['Domain', 'Task', select_model_by.upper()]
             ascending = [True, True, False]
             columns = ['ACC', 'MCA', 'JID'] if select_model_by == 'acc' else ['MCA', 'ACC', 'JID']
-            sort_key_func = None
-        elif model == 'gcd4da':
+        elif model in ['gcd4da', 'cdar']:
             indices = ['Dataset', 'Backbone', 'Model', 'Debias', 'Phase', 'Task', 'Ablation']
-            sort_by = ['Ablation', select_model_by.upper()]
-            ascending = [True, False]
+            sort_by = ['Task', 'Ablation', select_model_by.upper()]
+            ascending = [True, True, False]
             columns = ['ACC', 'MCA', 'UNK', 'JID'] if select_model_by == 'acc' else ['MCA', 'ACC', 'UNK', 'JID']
             if phase and phase == 'phase0':
                 columns.remove('UNK')
-            sort_key_func = None
         else:
             indices = ['Dataset', 'Backbone', 'Model', 'Task']
             sort_by = ['Task', select_model_by.upper()]
@@ -148,7 +146,8 @@ def print_df_from_config_vars(
             columns = ['ACC', 'MCA', 'UNK', 'JID'] if select_model_by == 'acc' else ['MCA', 'ACC', 'UNK', 'JID']
             if any(kw in model for kw in ['cop', 'dann']): 
                 columns.remove('UNK')
-            sort_key_func = lambda column: column.map(lambda value: ''.join(value.split('_')[::-1])) if column.name == 'Task' else column  # if task, sort by its target domain
+        
+        sort_key_func = sort_ek100_task_by_target if dataset == 'ek100' else None
         
         if dataset != 'ek100':
             if model != 'vanilla':
@@ -238,14 +237,14 @@ def get_best_info_by_target_workdir(p_target_workdir, select_model_by='mca', ign
 
             if info['dataset'] == 'ek100' and 'vanilla' in info['model']:
                 pattern += r'(?P<domain>[\w-]+)/'
-            elif 'gcd4da' in info['model']:
+            elif 'gcd4da' in info['model'] or 'cdar' in info['model']:
                 pattern += r'(?P<debias>[\w-]+)/(?P<phase>[\w-]+)/(?P<ablation>[\w-]+)/'
             
             if info['dataset'] == 'ek100' or 'vanilla' in info['model']:
                 pattern += r'(?P<task>[\w-]+)/'
 
             pattern += r'\d+__'
-
+            
             info = re.search(pattern, str(p_log)).groupdict()
             info.update(score_dicts[arg_best])
             info['jid'] = jid
@@ -268,7 +267,6 @@ def get_validated_p_target_workdir(
 ):
     p_train_workdirs = Path(r'work_dirs/train_output')
     assert dataset and backbone and model
-    assert dataset != 'ek100' or task  # if dataset is ek100, task required
 
     p_target_workdir_parent = p_train_workdirs / dataset / backbone / model
 
@@ -288,7 +286,7 @@ def get_validated_p_target_workdir(
         assert not (phase or ablation), '`phase` nor `ablation` should not be provided with `domain`'
         if domain:  # only for ek100
             p_target_workdir_parent /= domain
-    elif model == 'gcd4da':
+    elif model in ['gcd4da', 'cdar']:
         if one_line:
             assert debias and phase and ablation, 'provide both `debias`, `phase` and `ablation` for one-line mode'
         else:

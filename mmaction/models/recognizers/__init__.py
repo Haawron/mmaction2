@@ -3,5 +3,6 @@ from .audio_recognizer import AudioRecognizer
 from .base import BaseRecognizer
 from .recognizer2d import Recognizer2D, DARecognizer2d
 from .recognizer3d import Recognizer3D
+from .DArecognizer3d import DARecognizer3D
 
-__all__ = ['BaseRecognizer', 'Recognizer2D', 'Recognizer3D', 'AudioRecognizer', 'DARecognizer2d']
+__all__ = ['BaseRecognizer', 'Recognizer2D', 'Recognizer3D', 'AudioRecognizer', 'DARecognizer2d', 'DARecognizer3D']

@@ -10,7 +10,7 @@ from .base import AvgConsensus, BaseHead, get_fc_block
 
 class RunningAverage:
     def __init__(self, length=30):
-        self.m = 0
+        self.mean = None
         self.stored = None
         self.length = length
     def update(self, X):
@@ -20,7 +20,7 @@ class RunningAverage:
                 self.stored = torch.cat([self.stored, X], dim=0)[-self.length:]
             else:
                 self.stored = X[-self.length:]
-            self.m = self.stored.mean(dim=0)
+            self.mean = self.stored.mean(dim=0)
 
 
 @HEADS.register_module()
@@ -229,7 +229,7 @@ class ContrastiveDATSMHead(BaseHead):
             with torch.no_grad():
                 cls_score_labeled_view1 = cls_score[:N_labeled,0].unsqueeze(dim=1)  # [2N, 1, n_feat]
                 if not self.with_given_centroids:
-                    centroids = torch.stack([c.m for c in self.centroids])
+                    centroids = torch.stack([c.mean for c in self.centroids])
                 else:
                     centroids = self.centroids
                 centroids = centroids.unsqueeze(dim=0)  # [1, k, n_feat]

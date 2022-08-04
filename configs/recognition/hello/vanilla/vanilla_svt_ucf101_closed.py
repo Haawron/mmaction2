@@ -1,12 +1,10 @@
-
-num_classes = 12
-domain_adaptation = True
+domain_adaptation = False
 find_unused_parameters = True
+
 
 # model settings
 model = dict(
-    type='DARecognizer3D',
-    contrastive=True,  # if True, don't shuffle the chosen batch
+    type='Recognizer3D',
     backbone=dict(
         type='TimeSformer',
         pretrained=None,  # check load_from
@@ -17,32 +15,18 @@ model = dict(
         in_channels=3,
         dropout_ratio=0.,
         transformer_layers=None,
-        frozen_stages=11,
-        norm_eval=True,
         attention_type='divided_space_time',
         norm_cfg=dict(type='LN', eps=1e-6)),
-    cls_head=dict(
-        type='ContrastiveDATransformerHead',
-        num_classes=num_classes,
-        in_channels=768,
-        num_features=512,
-        loss_cls=dict(
-            type='SemisupervisedContrastiveLoss',
-            num_classes=num_classes,  # gonna be $k$ (for phase1)
-            unsupervised=True,
-            loss_ratio=.35,
-            tau=10.)),
+    cls_head=dict(type='TimeSformerHead', num_classes=400, in_channels=768),
     # model training and testing settings
     train_cfg=None,
-    test_cfg=dict(average_clips='prob'))  # None: prob - prob, score - -distance, None - feature
+    test_cfg=dict(average_clips='prob'))
 
 # dataset settings
-data_prefix_source = '/local_datasets/ucf101/rawframes'
-data_prefix_target = '/local_datasets/hmdb51/rawframes'
-ann_file_train_source = 'data/_filelists/ucf101/filelist_ucf_train_closed.txt'
-ann_file_train_target = 'data/_filelists/hmdb51/filelist_hmdb_train_open.txt'
-ann_file_valid_target = 'data/_filelists/hmdb51/filelist_hmdb_val_closed.txt'
-ann_file_test_target = 'data/_filelists/hmdb51/filelist_hmdb_test_closed.txt'
+data_prefix = '/local_datasets/ucf101/rawframes'
+ann_file_train = 'data/_filelists/ucf101/filelist_ucf_train_closed.txt'
+ann_file_valid = 'data/_filelists/ucf101/filelist_ucf_val_closed.txt'
+ann_file_test  = 'data/_filelists/ucf101/filelist_ucf_test_closed.txt'
 
 img_norm_cfg = dict(
     mean=[127.5, 127.5, 127.5], std=[127.5, 127.5, 127.5], to_bgr=False)
@@ -82,54 +66,31 @@ test_pipeline = [
         test_mode=True),
     dict(type='RawFrameDecode'),
     dict(type='Resize', scale=(-1, 224)),
-    # dict(type='ThreeCrop', crop_size=224),
-    dict(type='CenterCrop', crop_size=224),
+    dict(type='ThreeCrop', crop_size=224),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='FormatShape', input_format='NCTHW'),
     dict(type='Collect', keys=['imgs', 'label'], meta_keys=[]),
     dict(type='ToTensor', keys=['imgs', 'label'])
 ]
 data = dict(
-    videos_per_gpu=20,  # 여기가 gpu당 batch size임, source+target 한 번에 넣는 거라서 배치 사이즈 반절
-    workers_per_gpu=4,
-    val_dataloader=dict(videos_per_gpu=20),
-    train=[
-        dict(
-            type='ContrastiveRawframeDataset',
-            ann_file=ann_file_train_source,
-            data_prefix=data_prefix_source,
-            start_index=1,  # frame number starts with
-            filename_tmpl='img_{:05}.jpg',
-            sample_by_class=True,
-            pipeline=train_pipeline),
-        dict(
-            type='ContrastiveRawframeDataset',
-            ann_file=ann_file_train_target,
-            data_prefix=data_prefix_target,
-            start_index=1,
-            filename_tmpl='img_{:05}.jpg',
-            sample_by_class=True,
-            pipeline=train_pipeline),
-    ],
+    videos_per_gpu=8,
+    workers_per_gpu=2,
+    test_dataloader=dict(videos_per_gpu=1),
+    train=dict(
+        type='RawframeDataset',
+        ann_file=ann_file_train,
+        data_prefix=data_prefix,
+        pipeline=train_pipeline),
     val=dict(
         type='RawframeDataset',
-        ann_file=ann_file_valid_target,
-        data_prefix=data_prefix_target,
-        start_index=1,
-        filename_tmpl='img_{:05}.jpg',
+        ann_file=ann_file_valid,
+        data_prefix=data_prefix,
         pipeline=val_pipeline),
     test=dict(
         type='RawframeDataset',
-        ann_file=ann_file_test_target,
-        data_prefix=data_prefix_target,
-        start_index=1,
-        filename_tmpl='img_{:05}.jpg',
-        pipeline=test_pipeline)
-)
-evaluation = dict(
-    interval=5,
-    metrics=['top_k_accuracy', 'mean_class_accuracy', 'confusion_matrix'],  # valid, test 공용으로 사용
-    save_best='mean_class_accuracy')
+        ann_file=ann_file_test,
+        data_prefix=data_prefix,
+        pipeline=test_pipeline))
 
 # optimizer
 optimizer = dict(
@@ -147,20 +108,15 @@ optimizer = dict(
 optimizer_config = dict(grad_clip=dict(max_norm=40, norm_type=2))
 
 # learning policy
-lr_config = dict(
-    policy='step', step=[5, 10],
-    
-    # warmup
-    warmup='linear',
-    warmup_by_epoch=True,
-    warmup_iters=5,
-    warmup_ratio=0.1,  # start from [ratio * base_lr]
-)
+lr_config = dict(policy='step', step=[5, 10])
 total_epochs = 50
 
 # runtime settings
 checkpoint_config = dict(interval=10)
-
+evaluation = dict(
+    interval=5,
+    metrics=['top_k_accuracy', 'mean_class_accuracy', 'confusion_matrix'],  # valid, test 공용으로 사용
+    save_best='mean_class_accuracy')
 log_config = dict(
     interval=10,  # every [ ] steps
     hooks=[
@@ -168,11 +124,10 @@ log_config = dict(
         dict(type='TensorboardLoggerHook'),
     ])
 annealing_runner = False
-
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = './work_dirs/hello/ucf-hmdb/svt/gcd4da/'
+work_dir = './work_dirs/hello/ucf-hmdb/svt/vanilla/'
 load_from = 'data/weights/svt/releases/download/v1.0/SVT_mmaction.pth'
 resume_from = None
 workflow = [('train', 1)]

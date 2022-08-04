@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH -J tsm-ucf-vanilla-source-only
+#SBATCH -J vanilla-tsm-ucf2hmdb-source-only
 #SBATCH -p batch
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-gpu=4

@@ -174,6 +174,6 @@ annealing_runner = False
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
 work_dir = 'work_dirs/hello/ucf2hmdb/tsm/gcd4da'
-load_from = 'work_dirs/train_output/ucf2hmdb/tsm/vanilla/source-only/3509__tsm-ucf-vanilla-source-only/2/20220722-020357/best_mean_class_accuracy_epoch_10.pth'
+load_from = 'work_dirs/train_output/ucf2hmdb/tsm/vanilla/source-only/4380__vanilla-tsm-ucf2hmdb-source-only/4/20220728-204923/best_mean_class_accuracy_epoch_20.pth'
 resume_from = None
 workflow = [('train', 1)]

@@ -1,10 +1,8 @@
 from ..builder import HEADS
-from .base import AvgConsensus, BaseHead
-from ...core import confusion_matrix
+from .base import BaseHead
 
 from mmcv.cnn import normal_init
 
-import numpy as np
 import torch
 import torch.nn as nn
 
@@ -44,16 +42,16 @@ class TSMCOPHead(BaseHead):
 
         self.avg_pool = nn.AdaptiveAvgPool2d(1) if self.spatial_type == 'avg' else nn.Identity()
 
-        self.fc7 = nn.Linear(self.in_channels*2, self.num_hidden)
+        self.fc_cop1 = nn.Linear(self.in_channels*2, self.num_hidden)
         self.pair_num = int(self.num_clips*(self.num_clips-1)/2)  # NC2
-        self.fc8 = nn.Linear(self.num_hidden*self.pair_num, self.class_num)
+        self.fc_cop2 = nn.Linear(self.num_hidden*self.pair_num, self.class_num)
 
         self.dropout = nn.Dropout(p=dropout_ratio)
         self.relu = nn.ReLU(inplace=True)
 
     def init_weights(self):
         """Initiate the parameters from scratch."""
-        for layer in [self.fc7, self.fc8]:
+        for layer in [self.fc_cop1, self.fc_cop2]:
             normal_init(layer, std=self.init_std)
 
     def forward(self, f, num_segs, domains=None):
@@ -71,11 +69,11 @@ class TSMCOPHead(BaseHead):
         pf = torch.stack(pf, dim=1)  # [N, pair_num, segs, 2*C_in]
         pf = pf.reshape(-1, 2*self.in_channels)  # [N*pair_num*segs, 2*C_in]
 
-        h = self.dropout(self.relu(self.fc7(pf)))  # [N*pair_num*segs, num_hidden]
+        h = self.dropout(self.relu(self.fc_cop1(pf)))  # [N*pair_num*segs, num_hidden]
         h = h.reshape(-1, self.pair_num, self.num_segments, self.num_hidden)  # [N, pair_num, segs, num_hidden]
         h = h.permute(0, 2, 1, 3)  # [N, segs, pair_num, num_hidden]
         h = h.reshape(-1, self.pair_num*self.num_hidden)  # [N*segs, pair_num*num_hidden]
-        h = self.fc8(h)  # logits; [N*segs, class_num]
+        h = self.fc_cop2(h)  # logits; [N*segs, class_num]
         h = h.reshape(-1, self.num_segments, self.class_num)  # [N, segs, class_num]
         h = h.mean(dim=1)  # average consensus; [N, class_num]
 

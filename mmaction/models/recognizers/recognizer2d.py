@@ -363,7 +363,7 @@ class DARecognizer2d(Recognizer2D):
             if self.contrastive:  # {GCD}
                 cls_score = cls_score.unsqueeze(dim=1)  # [N, 1, n_feat]
                 if not self.cls_head.with_given_centroids:
-                    centroids = torch.stack([c.m for c in self.cls_head.centroids])
+                    centroids = torch.stack([c.mean for c in self.cls_head.centroids])
                 else:
                     centroids = self.cls_head.centroids
                 centroids = centroids.unsqueeze(dim=0)  # [1, k, n_feat]
