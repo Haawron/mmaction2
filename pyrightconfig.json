@@ -9,6 +9,7 @@
         "work_dirs/",
         "mmaction2.egg-info/",
         "slurm/logs/",
+        "failure_modes_visualized",
     ],
   
     "defineConstant": {

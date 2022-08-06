@@ -8,6 +8,8 @@
 #SBATCH --cpus-per-gpu=4
 #SBATCH --mem-per-gpu=15G
 #SBATCH -o slurm/logs/slurm-%A_%a-%x.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=gunsbrother@khu.ac.kr
 
 echo 'extracting the dataset from NAS ...'
 . slurm/utils/copy_ucf_hmdb_to_node_and_untar.sh

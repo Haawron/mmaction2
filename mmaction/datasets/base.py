@@ -190,7 +190,10 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
                 raise KeyError(f'metric {metric} is not supported')
 
         eval_results = OrderedDict()
-        gt_labels = [ann['label'] for ann in self.video_infos]
+        if metric_options.get('use_predefined_labels', False):
+            gt_labels = self.predefined_labels
+        else:
+            gt_labels = [ann['label'] for ann in self.video_infos]
 
         results = np.array(results)
         if self.num_classes:
@@ -235,10 +238,10 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
                 cls_cnt = cf_mat.sum(axis=1)
                 cls_hit = np.diag(cf_mat)
                 cls_acc = np.array([hit / cnt if cnt else 0.0 for cnt, hit in zip(cls_cnt, cls_hit)])
-                OS, unk = cls_acc[:-1].mean(), cls_acc[-1]
-                H_mean_acc = 2 * OS * unk / (OS + unk)
+                os_star, unk = cls_acc[:-1].mean(), cls_acc[-1]
+                H_mean_acc = 2 * os_star * unk / (os_star + unk)
                 eval_results['H_mean_class_accuracy'] = H_mean_acc
-                log_msg = f'\nH_mean_acc\t{H_mean_acc:.4f}'
+                log_msg = f'\nH_mean_acc\t{H_mean_acc:.4f} (OS* {os_star:.4f}, UNK: {unk:.4f})'
                 print_log(log_msg, logger=logger)
                 continue
 

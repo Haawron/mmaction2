@@ -10,30 +10,53 @@ import pickle
 import csv
 
 
+# ex)
+    # python slurm/osvm/osvm.py -n 5 -pf work_dirs/train_output/ek100/tsm/vanilla/P02/source-only/16847__vanilla_tsm_P02_source-only/0/20220402-053842/features -s P02 -t P02 -sp
+    # python slurm/osvm/osvm.py -n 5 -j 16847 -sp
+
+
 def main():
     parser = argparse.ArgumentParser(description='OSVM')
     parser.add_argument('-n', '--num-classes', type=int, default=12,
                         help='without unk')
+
+    parser.add_argument('-j', '--jobid', type=int, default=None,
+                        help='')
+                        
     parser.add_argument('-pf', '--p-feature-root', type=Path, default=Path('work_dirs/hello/ucf101/vanilla'),
                         help='')
     parser.add_argument('-s', '--source', type=str, default='ucf',
                         help='')
     parser.add_argument('-t', '--target', type=str, default='hmdb',
                         help='')
+
+    parser.add_argument('-sp', '--save-preds', action='store_true',
+                        help='')
     args = parser.parse_args()
-    main_with_args(args.p_feature_root, args.source, args.target, args.num_classes)
+    
+    if args.jobid is not None:
+        p_feature_root, source, target = find_feature_path_from_jid(args.jobid)
+    else:
+        p_feature_root = args.p_feature_root
+        source, target = args.source, args.target
+
+    main_with_args(p_feature_root, source, target, args.num_classes, args.save_preds)
+
+
+def find_feature_path_from_jid(jobid:int) -> Path:
+    pass
 
 
 def main_with_args(
     p_feature_root:Path, source:str, target:str,
-    num_classes:int
+    num_classes:int, save_preds:bool=False
 ):
     # getting data and label
     # train: source closed
     # valid: target closed (cheated)
     # test: target open
     data_train, data_valid, data_test = get_data(p_feature_root, source, target)
-    label_train, label_valid, label_test = get_label(source, target)
+    label_train, label_valid, label_test, p_label_test = get_label(source, target)
     # make closed set
     data_train = data_train[label_train<num_classes]
     label_train = label_train[label_train<num_classes]
@@ -52,13 +75,24 @@ def main_with_args(
 
     # test P_I-SVM (OSVMs)
     priors = get_priors(label_train)
-    (os_star, unk, H, mca, conf), omega = test_pi_svm(num_classes, priors, sss, osvms, data_test, label_test, params)
+    (os_star, unk, H, mca, conf), omega, pred_test = test_pi_svm(num_classes, priors, sss, osvms, data_test, label_test, params)
     
     # eval
     print(f'\nomega: {omega}')
     print(f'H: {100*H:.1f}  |  OS: {100*mca:.1f}  |  OS*: {100*os_star:.1f}  |  UNK: {100*unk:.1f}')
     print(conf)
     print('\n\n')
+
+    if save_preds:
+        print('saving predictions...')
+        p_predictions = p_feature_root.parent / 'predictions' / 'osvm.csv'
+        p_predictions.parent.mkdir(parents=True, exist_ok=True)
+        with p_predictions.open('w') as f, p_label_test.open('r') as f_label:
+            writer = csv.writer(f, delimiter=' ')
+            reader = csv.reader(f_label, delimiter=' ')
+            for label_row, prediction in zip(reader, pred_test):
+                writer.writerow(label_row + [prediction])
+        print('done')
 
 
 def get_data(p_feature_root:Path, source:str, target:str):
@@ -76,14 +110,19 @@ def get_data(p_feature_root:Path, source:str, target:str):
 def get_label(source:str, target:str):
     print('retrieving labels ...', end=' ')
     domain2name = {'ucf': 'ucf101', 'hmdb': 'hmdb51', 'P02': 'ek100', 'P04': 'ek100', 'P22': 'ek100'}
-    with Path(rf'data/_filelists/{domain2name[source]}/filelist_{source}_train_open.txt').open('r') as f_train, \
-        Path(rf'data/_filelists/{domain2name[target]}/filelist_{target}_valid_open.txt').open('r') as f_val, \
-        Path(rf'data/_filelists/{domain2name[target]}/filelist_{target}_test_open.txt').open('r') as f_test:
+    p_label_train, p_label_valid, p_label_test = (
+        Path(rf'data/_filelists/{domain2name[source]}/filelist_{source}_train_open.txt'),
+        Path(rf'data/_filelists/{domain2name[target]}/filelist_{target}_valid_open.txt'),
+        Path(rf'data/_filelists/{domain2name[target]}/filelist_{target}_test_open.txt')
+    )
+    with p_label_train.open('r') as f_train, \
+        p_label_valid.open('r') as f_val, \
+        p_label_test.open('r') as f_test:
         label_train = np.array(list(csv.reader(f_train, delimiter=' ')))[:,-1].astype(np.int32)
         label_valid = np.array(list(csv.reader(f_val, delimiter=' ')))[:,-1].astype(np.int32)
         label_test = np.array(list(csv.reader(f_test, delimiter=' ')))[:,-1].astype(np.int32)
     print('done')
-    return label_train, label_valid, label_test
+    return label_train, label_valid, label_test, p_label_test
 
 
 def train_osvms(
@@ -157,9 +196,10 @@ def test_pi_svm(
         if criterion > curr_metric_score:
             curr_metric_score = criterion
             metric_scores = os_star, unk, H, mca, conf
+            best_pred = pred_test_tmp
 
     print('done')
-    return metric_scores, omega
+    return metric_scores, omega, best_pred
 
 
 def get_metric_scores(num_classes, pred_test, label_test):

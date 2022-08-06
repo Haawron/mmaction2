@@ -1,3 +1,7 @@
+domain_adaptation = False
+find_unused_parameters = True
+
+
 # model settings
 model = dict(
     type='Recognizer3D',
@@ -13,7 +17,7 @@ model = dict(
         transformer_layers=None,
         attention_type='divided_space_time',
         norm_cfg=dict(type='LN', eps=1e-6)),
-    cls_head=dict(type='TimeSformerHead', num_classes=400, in_channels=768),
+    cls_head=dict(type='TimeSformerHead', num_classes=13, in_channels=768),
     # model training and testing settings
     train_cfg=None,
     test_cfg=dict(average_clips='prob'))
@@ -70,7 +74,7 @@ test_pipeline = [
 ]
 data = dict(
     videos_per_gpu=8,
-    workers_per_gpu=2,
+    workers_per_gpu=4,
     test_dataloader=dict(videos_per_gpu=1),
     train=dict(
         type='RawframeDataset',
@@ -111,7 +115,7 @@ total_epochs = 50
 checkpoint_config = dict(interval=10)
 evaluation = dict(
     interval=5,
-    metrics=['top_k_accuracy', 'mean_class_accuracy', 'confusion_matrix'],  # valid, test 공용으로 사용
+    metrics=['top_k_accuracy', 'H_mean_class_accuracy', 'mean_class_accuracy', 'confusion_matrix'],  # valid, test 공용으로 사용
     save_best='mean_class_accuracy')
 log_config = dict(
     interval=10,  # every [ ] steps

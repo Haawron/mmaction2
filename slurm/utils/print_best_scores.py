@@ -4,6 +4,9 @@ import argparse
 import pandas as pd
 import json
 
+from commons.patterns import get_infodict_and_pattern_from_workdir_name
+
+
 # test cases
 # python slurm/utils/print_best_scores.py -d ucf2hmdb -m cop
 # python slurm/utils/print_best_scores.py -d ucf2hmdb -m 'cop-from-k400'
@@ -221,8 +224,9 @@ def get_best_info_by_target_workdir(p_target_workdir, select_model_by='mca', ign
         return jid
 
     if p_target_workdir: # for a single job
-        pattern = r'work_dirs/train_output/(?P<dataset>[\w-]+)/(?P<backbone>[\w-]+)/(?P<model>[\w-]+)/'
-        info = re.search(pattern, str(p_target_workdir)).groupdict()
+        # pattern = r'work_dirs/train_output/(?P<dataset>[\w-]+)/(?P<backbone>[\w-]+)/(?P<model>[\w-]+)/'
+        # info = re.search(pattern, str(p_target_workdir)).groupdict()
+        info, pattern = get_infodict_and_pattern_from_workdir_name(p_target_workdir)
 
         p_logs = list(p_target_workdir.glob('**/*.log'))
         p_logs_and_score_dicts = [(p_log, get_test_scores_from_logfile(p_log, for_cop=('cop' in info['model']))) for p_log in p_logs]
@@ -235,15 +239,15 @@ def get_best_info_by_target_workdir(p_target_workdir, select_model_by='mca', ign
             p_log = p_logs[arg_best]
             jid = p_log2jid(p_log)
 
-            if info['dataset'] == 'ek100' and 'vanilla' in info['model']:
-                pattern += r'(?P<domain>[\w-]+)/'
-            elif 'gcd4da' in info['model'] or 'cdar' in info['model']:
-                pattern += r'(?P<debias>[\w-]+)/(?P<phase>[\w-]+)/(?P<ablation>[\w-]+)/'
+            # if info['dataset'] == 'ek100' and 'vanilla' in info['model']:
+            #     pattern += r'(?P<domain>[\w-]+)/'
+            # elif 'gcd4da' in info['model'] or 'cdar' in info['model']:
+            #     pattern += r'(?P<debias>[\w-]+)/(?P<phase>[\w-]+)/(?P<ablation>[\w-]+)/'
             
-            if info['dataset'] == 'ek100' or 'vanilla' in info['model']:
-                pattern += r'(?P<task>[\w-]+)/'
+            # if info['dataset'] == 'ek100' or 'vanilla' in info['model']:
+            #     pattern += r'(?P<task>[\w-]+)/'
 
-            pattern += r'\d+__'
+            # pattern += r'\d+__'
             
             info = re.search(pattern, str(p_log)).groupdict()
             info.update(score_dicts[arg_best])

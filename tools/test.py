@@ -41,8 +41,7 @@ def parse_args():
         help='output result file in pkl/yaml/json format')
     parser.add_argument(
         '--save-eval',
-        type=bool,
-        default=True,
+        action='store_true',
         help='Whether to save the evaluated values along with outfile.')
     parser.add_argument(
         '--fuse-conv-bn',

@@ -17,7 +17,7 @@ model = dict(
         transformer_layers=None,
         attention_type='divided_space_time',
         norm_cfg=dict(type='LN', eps=1e-6)),
-    cls_head=dict(type='TimeSformerHead', num_classes=400, in_channels=768),
+    cls_head=dict(type='TimeSformerHead', num_classes=12, in_channels=768),
     # model training and testing settings
     train_cfg=None,
     test_cfg=dict(average_clips='prob'))

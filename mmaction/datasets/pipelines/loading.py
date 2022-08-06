@@ -286,12 +286,10 @@ class COPSampleFrames(SampleFrames):
         total_frames = results['total_frames']
         single_clip_range = (self.clip_len - 1) * self.frame_interval + 1  # k = d_f(l-1) + 1 
         total_range = self.num_clips * single_clip_range + (self.clip_interval - 1) * (self.num_clips - 1)  # kN + (d_c-1)(N-1)
-        # assert total_frames >= total_range, f'Clip too short : total frames={total_frames} < range needed={total_range}'
-        # offset_start = np.random.randint(total_frames - total_range)
         offset_start = np.random.randint(max(total_frames-total_range, 1))
         clip_offsets = offset_start + (single_clip_range + self.clip_interval - 1) * np.arange(self.num_clips)  # [N]
         frame_inds = clip_offsets[:,None] + self.frame_interval * np.arange(self.clip_len)[None,:]  # [N, d_f*l]
-        frame_inds[frame_inds >= total_frames] = total_frames -1  # repeating last frame
+        frame_inds[frame_inds >= total_frames] = total_frames -1  # repeating the last frame
         frame_inds = frame_inds.reshape(-1)  # [N*d_f*l]
 
         start_index = results['start_index']

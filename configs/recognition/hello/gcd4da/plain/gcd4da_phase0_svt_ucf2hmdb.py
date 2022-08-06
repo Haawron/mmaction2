@@ -17,8 +17,8 @@ model = dict(
         in_channels=3,
         dropout_ratio=0.,
         transformer_layers=None,
-        frozen_stages=11,
-        norm_eval=True,
+        frozen_stages=-1,
+        norm_eval=False,
         attention_type='divided_space_time',
         norm_cfg=dict(type='LN', eps=1e-6)),
     cls_head=dict(
@@ -90,7 +90,7 @@ test_pipeline = [
     dict(type='ToTensor', keys=['imgs', 'label'])
 ]
 data = dict(
-    videos_per_gpu=20,  # 여기가 gpu당 batch size임, source+target 한 번에 넣는 거라서 배치 사이즈 반절
+    videos_per_gpu=2,  # 여기가 gpu당 batch size임, source+target 한 번에 넣는 거라서 배치 사이즈 반절
     workers_per_gpu=4,
     val_dataloader=dict(videos_per_gpu=20),
     train=[

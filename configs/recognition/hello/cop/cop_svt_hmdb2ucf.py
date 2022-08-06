@@ -34,12 +34,12 @@ model = dict(
     test_cfg=dict(average_clips='prob'))
 # model training and testing settings
 # dataset settings
-data_prefix_source = '/local_datasets/ucf101/rawframes'
-data_prefix_target = '/local_datasets/hmdb51/rawframes'
-ann_file_train_source = 'data/_filelists/ucf101/filelist_ucf_train_closed.txt'
-ann_file_train_target = 'data/_filelists/hmdb51/filelist_hmdb_train_open.txt'
-ann_file_valid_target = 'data/_filelists/hmdb51/filelist_hmdb_val_closed.txt'
-ann_file_test_target = 'data/_filelists/hmdb51/filelist_hmdb_test_closed.txt'
+data_prefix_source = '/local_datasets/hmdb51/rawframes'
+data_prefix_target = '/local_datasets/ucf101/rawframes'
+ann_file_train_source = 'data/_filelists/hmdb51/filelist_hmdb_train_closed.txt'
+ann_file_train_target = 'data/_filelists/ucf101/filelist_ucf_train_open.txt'
+ann_file_valid_target = 'data/_filelists/ucf101/filelist_ucf_val_closed.txt'
+ann_file_test_target = 'data/_filelists/ucf101/filelist_ucf_test_closed.txt'
 
 img_norm_cfg = dict(
     mean=[127.5, 127.5, 127.5], std=[127.5, 127.5, 127.5], to_bgr=False)
@@ -176,7 +176,7 @@ annealing_runner = False
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = './work_dirs/hello/ucf2hmdb/svt/cop/'
+work_dir = './work_dirs/hello/hmdb2ucf/svt/cop/'
 load_from = 'data/weights/svt/releases/download/v1.0/SVT_mmaction.pth'
 resume_from = None
 workflow = [('train', 1)]

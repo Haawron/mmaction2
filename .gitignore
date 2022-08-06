@@ -144,3 +144,4 @@ mmaction/.mim
 logs/
 hello.py
 tmp/
+failure_modes_visualized/
