@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 
 import math
-from itertools import combinations
+from itertools import combinations, permutations
 
 
 @HEADS.register_module()
@@ -24,7 +24,10 @@ class TSMCOPHead(BaseHead):
             dropout_ratio=0.8,
             init_std=0.001,
             is_shift=True,
-            **kwargs):
+            as_neck=False,
+            is_aux=False,
+            **kwargs
+        ):
         """
         Args:
             num_features (int): 512
@@ -49,36 +52,53 @@ class TSMCOPHead(BaseHead):
         self.dropout = nn.Dropout(p=dropout_ratio)
         self.relu = nn.ReLU(inplace=True)
 
+        self.as_neck = as_neck
+        self.is_aux = is_aux
+
     def init_weights(self):
         """Initiate the parameters from scratch."""
         for layer in [self.fc_cop1, self.fc_cop2]:
             normal_init(layer, std=self.init_std)
 
-    def forward(self, f, num_segs, domains=None):
-        # f: [N*num_clips*segs, C_in, 7, 7]
-        # 192 = [2(domains)*2(videos_per_gpu); permuted] * 3(num_clips; permuted) * 16(segs, clip_len)
+    def forward(self, f, num_segs=None, domains=None, gt_labels=None):
+        # B' = 2B or 2B * 2
+        # f: [B'*N*T, C_feat, 7, 7]
+        ff = self.avg_pool(f)  # [B'*N*T, C_feat, 1, 1]
+        ff = torch.flatten(ff, start_dim=1)  # [B'*N*T, C_feat]
+        ff = ff.reshape(-1, self.num_clips, self.num_segments, self.in_channels)  # [B', N, T, C_feat]
+        ff = ff.transpose(1, 0)  # [N, B', T, C_feat]
 
-        f = self.avg_pool(f)  # [N*num_clips*segs, C_in, 1, 1]
-        f = torch.flatten(f, start_dim=1)  # [N*num_clips*segs, C_in]
-        f = f.reshape(-1, self.num_clips, self.num_segments, self.in_channels)  # [N, num_clips, segs, C_in]
-        f = f.transpose(1, 0)  # [num_clips, N, segs, C_in]
+        if self.as_neck:
+            # naively applying f[clip_orders] produces a tensor shaped [B', N, B', T, C_feat]
+            B_ = ff.shape[1]
+            shuffle_labels = torch.randint(self.class_num, size=(B_,), device=ff.device)
+            clip_orders = torch.tensor(list(permutations(range(self.num_clips))), device=ff.device)[shuffle_labels].T  # [N, B']
+            clip_orders = clip_orders.reshape(*clip_orders.shape, 1, 1)  # [N, B', 1, 1]
+            clip_orders = clip_orders.expand(-1, -1, *ff.shape[-2:])  # [N, B', T, C_feat], repeated
+            ff = ff.gather(dim=0, index=clip_orders)  # [N, B', T, C_feat]
 
-        # pair_num = comb(num_clips,2)
-        # [pair_num] * [N, segs, 2*C_in]
-        pf = [torch.cat([f[i], f[j]], dim=-1) for i, j in combinations(range(self.num_clips), 2)]  # dict order
-        pf = torch.stack(pf, dim=1)  # [N, pair_num, segs, 2*C_in]
-        pf = pf.reshape(-1, 2*self.in_channels)  # [N*pair_num*segs, 2*C_in]
+        # P: pair_num = comb(num_clips,2)
+        # 2*C_feat is just a reference of original COP
+        pf:list         = [torch.cat([ff[i], ff[j]], dim=-1) for i, j in combinations(range(self.num_clips), 2)]  # dict order, P * [2B, T, 2*C_feat]
+        pf:torch.tensor = torch.stack(pf, dim=1)  # [B', P, T, 2*C_feat]
+        pf:torch.tensor = pf.reshape(-1, 2*self.in_channels)  # [B'*P*T, 2*C_feat]
 
-        h = self.dropout(self.relu(self.fc_cop1(pf)))  # [N*pair_num*segs, num_hidden]
-        h = h.reshape(-1, self.pair_num, self.num_segments, self.num_hidden)  # [N, pair_num, segs, num_hidden]
-        h = h.permute(0, 2, 1, 3)  # [N, segs, pair_num, num_hidden]
-        h = h.reshape(-1, self.pair_num*self.num_hidden)  # [N*segs, pair_num*num_hidden]
-        h = self.fc_cop2(h)  # logits; [N*segs, class_num]
-        h = h.reshape(-1, self.num_segments, self.class_num)  # [N, segs, class_num]
-        h = h.mean(dim=1)  # average consensus; [N, class_num]
+        # C_h: num_hidden
+        # C: class_num
+        h = self.dropout(self.relu(self.fc_cop1(pf)))  # [B'*P*T, C_h]
+        h = h.reshape(-1, self.pair_num, self.num_segments, self.num_hidden)  # [B', P, T, C_h]
+        h = h.permute(0, 2, 1, 3)  # [B', T, P, C_h]
+        h = h.reshape(-1, self.pair_num*self.num_hidden)  # [B'*T, P*C_h]
+        h = self.fc_cop2(h)  # logits; [B'*T, C]
+        h = h.reshape(-1, self.num_segments, self.class_num)  # [B', T, C]
+        h = h.mean(dim=1)  # average consensus; [B', C]
 
-        return h
-    
+        if self.as_neck:
+            loss = {'loss_cop': self.loss_cls(h, shuffle_labels)}
+            return f, loss
+        else:
+            return h
+
     def loss(self, cls_score, labels, domains, **kwargs):
         losses = super().loss(cls_score, labels)  # todo: dann은 train_ratio 있어도 잘 되는데 왜 여기서만 문제됨?
         return losses

@@ -188,7 +188,7 @@ class Recognizer2D(BaseRecognizer):
 
 
 @RECOGNIZERS.register_module()
-class DARecognizer2d(Recognizer2D):
+class DARecognizer2D(Recognizer2D):
     def __init__(self,
                  backbone=None,
                  cls_head=None,
@@ -196,29 +196,50 @@ class DARecognizer2d(Recognizer2D):
                  contrastive=False,
                  train_cfg=None,
                  test_cfg=None):
-        super().__init__(backbone, 
+        super().__init__(backbone,
                         cls_head=cls_head,
-                        neck=neck, 
-                        train_cfg=train_cfg, 
+                        neck=neck,
+                        train_cfg=train_cfg,
                         test_cfg=test_cfg)
         self.contrastive = contrastive
-    
-    def forward_train(self, imgs, labels, domains, **kwargs):
-        assert self.with_cls_head
-        batches = imgs.shape[0]
+
+    def _reshape_inputs(self, imgs, labels, domains):
+        dim = imgs.dim()
+        B = imgs.shape[0] // 2
         if self.contrastive:
-            # [N, 2, segs, C, H, W] -> [2N * segs, C, H, W]
+            assert dim in [6, 7], f'Wrong input dimension {imgs.dim}. Should be 6 or 7'
+            if dim == 6:  # NCHW (default)
+                # [2B, 2, N, C, H, W] -> [2B * 2 * N, C, H, W]
+                N, T = None, imgs.shape[2]  # N acts like T
+            elif dim == 7:  # NCTHW (COP multi-task)
+                # [2B, 2, N, C, T, H, W] -> [2B * 2 * N * T, C, H, W]
+                N, T = imgs.shape[2], imgs.shape[4]
+                imgs = imgs.transpose(3, 4)
             imgs = imgs.reshape((-1, ) + imgs.shape[-3:])
-            labels = labels.reshape((-1, ) + labels.shape[2:])  # unsqueezed
+            labels = labels.reshape((-1, ) + labels.shape[2:])  # [2B, 2, 1] -> [2B*2, 1]
             domains = domains.reshape(-1)
         else:
-            # [N, segs, C, H, W] -> [N * segs, C, H, W]
+            assert dim in [5, 6], f'Wrong input dimension {imgs.dim}. Should be 5 or 6'
+            if dim == 5:  # NCHW
+                # [2B, N, C, H, W] -> [2B * N, C, H, W]
+                N, T = None, imgs.shape[1]
+            elif dim == 6:  # NCTHW
+                # [2B, N, C, T, H, W] -> [2B * N * T, C, H, W]
+                N, T = imgs.shape[1], imgs.shape[3]
+                imgs = imgs.transpose(2, 3)
             imgs = imgs.reshape((-1, ) + imgs.shape[-3:])
-        num_segs = imgs.shape[0] // batches
+        self.B, self.N, self.T = B, N, T
+        gt_labels = labels.squeeze()  # [2B] or [2B*2]
+        return imgs, gt_labels, domains
+
+    def forward_train(self, imgs, labels, domains, **kwargs):
+        assert self.with_cls_head
+        imgs, gt_labels, domains = self._reshape_inputs(imgs, labels, domains)
 
         losses = dict()
 
-        x = self.extract_feat(imgs)
+        # X = 2B*2*T, 2B*2*N*T, 2B*T, 2B*N*T
+        x = self.extract_feat(imgs)  # [X, C_feat, 7, 7]
 
         if self.backbone_from in ['torchvision', 'timm']:
             if len(x.shape) == 4 and (x.shape[2] > 1 or x.shape[3] > 1):
@@ -227,20 +248,14 @@ class DARecognizer2d(Recognizer2D):
             x = x.reshape((x.shape[0], -1))
             x = x.reshape(x.shape + (1, 1))
 
-        if self.with_neck:
-            x = [
-                each.reshape((-1, num_segs) +
-                             each.shape[1:]).transpose(1, 2).contiguous()
-                for each in x
-            ]
-            x, loss_aux = self.neck(x, labels.squeeze())
-            x = x.squeeze(2)
-            num_segs = 1
+        if self.with_neck:  # auxiliary
+            x, loss_aux = self.neck(x, None, domains, gt_labels)
             losses.update(loss_aux)
 
-        cls_score = self.cls_head(x, num_segs, domains)
+        cls_score = self.cls_head(x, None, domains)  # [2B( * 2) * N, 1~3, C]
+        if self.N is not None:
+            cls_score = cls_score.reshape(-1, self.N, *cls_score.shape[-2:])
 
-        gt_labels = labels.squeeze()
         loss_cls = self.cls_head.loss(cls_score, gt_labels, domains, **kwargs)
         losses.update(loss_cls)
 
@@ -264,7 +279,7 @@ class DARecognizer2d(Recognizer2D):
             return self.forward_train(imgs, label, domains, **kwargs)
 
         return self.forward_test(imgs, domains, **kwargs)
-    
+
     def train_step(self, data_batches, domains, optimizer=None, **kwargs):
         if self.cls_head.__dict__.get('linear_head_debug', False):  # todo: workaround for debugging, linear head debug recognizer를 따로 만들어야 될 듯
             imgs = data_batches['imgs']
@@ -293,15 +308,18 @@ class DARecognizer2d(Recognizer2D):
             num_samples=imgs.shape[0])
 
         return outputs
-        
+
     def _do_test(self, imgs, domains):
         """Defines the computation performed at every call when evaluation,
         testing and gradcam."""
-        batches = imgs.shape[0]
-        imgs = imgs.reshape((-1, ) + imgs.shape[2:])
-        num_segs = imgs.shape[0] // batches
 
-        x = self.extract_feat(imgs)  # [N*segs, C, H, W]
+        # [B, N, C, T, H, W] or [B, T, C, H, W]
+        if imgs.dim() == 6:
+            imgs = imgs.transpose(2, 3)  # [B, N, T, C, H, W]
+        imgs = imgs.reshape(-1, *imgs.shape[-3:])
+
+        # X = BNT or BT
+        x = self.extract_feat(imgs)  # [X, C_feat, 7, 7]
 
         if self.backbone_from in ['torchvision', 'timm']:
             if len(x.shape) == 4 and (x.shape[2] > 1 or x.shape[3] > 1):
@@ -310,27 +328,23 @@ class DARecognizer2d(Recognizer2D):
             x = x.reshape((x.shape[0], -1))
             x = x.reshape(x.shape + (1, 1))
 
-        if self.with_neck:
-            x = [
-                each.reshape((-1, num_segs) +
-                             each.shape[1:]).transpose(1, 2).contiguous()
-                for each in x
-            ]
-            x, _ = self.neck(x)
-            x = x.squeeze(2)
-            num_segs = 1
+        if self.with_neck and not self.neck.is_aux:  # auxiliary
+            x, _ = self.neck(x, None, domains)
 
         if self.feature_extraction:
-            # perform spatial pooling
-            avg_pool = nn.AdaptiveAvgPool2d(1)
-            x = avg_pool(x)
-            # squeeze dimensions
-            x = x.reshape((batches, num_segs, -1))
-            # temporal average pooling
-            x = x.mean(axis=1)
+            x = nn.AdaptiveAvgPool2d(1)(x)  # [X, C_feat, 1, 1]
+            x = torch.flatten(x, start_dim=1)  # [X, C_feat]
+            x = x.reshape(-1, self.T, x.shape[-1])  # [*, T, C_feat]
+            x = x.mean(axis=1)  # [*, C_feat]
+            x = x.reshape(
+                (2, self.B)
+                + (2,) if self.contrastive else ()
+                + (self.N) if self.N is not None else ()
+                + (x.shape[-1],)
+            )
             return x
 
-        cls_score = self.cls_head(x, num_segs, domains)
+        cls_score = self.cls_head(x, None, domains)
         # Shapes (N.B. ignore num_crops)
             # Vanilla:      [N, K]          (Not here, just for notice)
             # DANN: list of [N, K], [N, 1]
@@ -361,17 +375,18 @@ class DARecognizer2d(Recognizer2D):
             return cls_score
         else:
             if self.contrastive:  # {GCD}
-                cls_score = cls_score.unsqueeze(dim=1)  # [N, 1, n_feat]
-                if not self.cls_head.with_given_centroids:
-                    centroids = torch.stack([c.mean for c in self.cls_head.centroids])
-                else:
-                    centroids = self.cls_head.centroids
-                centroids = centroids.unsqueeze(dim=0)  # [1, k, n_feat]
-                distances = (cls_score - centroids) ** 2  # [N, K, n_feat]
-                distances = distances.sum(dim=2) ** .5  # [N, K]
-                cls_score = -distances  # [N, K]
+                # cls_score = cls_score.unsqueeze(dim=1)  # [N, 1, n_feat]
+                # if not self.cls_head.with_given_centroids:
+                #     centroids = torch.stack([c.mean for c in self.cls_head.centroids])
+                # else:
+                #     centroids = self.cls_head.centroids
+                # centroids = centroids.unsqueeze(dim=0)  # [1, k, n_feat]
+                # distances = (cls_score - centroids) ** 2  # [N, K, n_feat]
+                # distances = distances.sum(dim=2) ** .5  # [N, K]
+                # cls_score = -distances  # [N, K]
+                cls_score = self.cls_head._get_logits_from_features(cls_score)
 
-            if average_clips == 'score': 
+            if average_clips == 'score':
                 return cls_score  # [N, K] or [N, K+1]
-            elif average_clips == 'prob': 
+            elif average_clips == 'prob':
                 return F.softmax(cls_score, dim=1)  # [N, K] or [N, K+1]

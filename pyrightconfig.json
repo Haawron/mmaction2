@@ -1,4 +1,4 @@
-{   
+{
     "exclude": [
         ".git/",
         ".github/",
@@ -9,16 +9,17 @@
         "work_dirs/",
         "mmaction2.egg-info/",
         "slurm/logs/",
-        "failure_modes_visualized",
+        "failure_modes_visualized/",
+        "visualizations/",
     ],
-  
+
     "defineConstant": {
         "DEBUG": true
     },
-  
+
     "reportMissingImports": true,
     "reportMissingTypeStubs": false,
-  
+
     "pythonVersion": "3.7",
     "pythonPlatform": "Linux",
 }

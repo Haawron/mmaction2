@@ -47,7 +47,10 @@ class ContrastiveRawframeDataset(RawframeDataset):
         result = {}
         for (k1, v1), (k2, v2) in zip(results_view1.items(), results_view2.items()):
             assert k1 == k2
-            result[k1] = torch.stack([v1, v2])  # [2, segment, C, H, W] or [2]
+            # [2, N, T, C, H, W] for 3D tensors
+            # [2, N, C, H, W] for 2D tensors
+            # [2] for other scalar infos
+            result[k1] = torch.stack([v1, v2])
         return result
 
     def prepare_test_frames(self, idx):
@@ -56,5 +59,8 @@ class ContrastiveRawframeDataset(RawframeDataset):
         result = {}
         for (k1, v1), (k2, v2) in zip(results_view1.items(), results_view2.items()):
             assert k1 == k2
-            result[k1] = torch.stack([v1, v2])  # [2, segment, C, H, W] or [2]
+            # [2, N, T, C, H, W] for 3D tensors
+            # [2, N, C, H, W] for 2D tensors
+            # [2] for other scalar infos
+            result[k1] = torch.stack([v1, v2])
         return result

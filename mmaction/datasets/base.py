@@ -1,6 +1,7 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import copy
 import os.path as osp
+from pathlib import Path
 import warnings
 from abc import ABCMeta, abstractmethod
 from collections import OrderedDict, defaultdict
@@ -10,6 +11,8 @@ import re
 import mmcv
 import numpy as np
 import torch
+import time
+import pickle
 from mmcv.utils import print_log
 from torch.utils.data import Dataset
 
@@ -17,6 +20,8 @@ from ..core import (mean_average_precision, mean_class_accuracy,
                     mmit_mean_average_precision, top_k_accuracy,
                     confusion_matrix)
 from .pipelines import Compose
+
+# from slurm.gcd4da.commons.kmeans import train
 
 
 class BaseDataset(Dataset, metaclass=ABCMeta):
@@ -182,7 +187,7 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
         metrics = metrics if isinstance(metrics, (list, tuple)) else [metrics]
         allowed_metrics = [
             'top_k_accuracy', 'mean_class_accuracy', 'H_mean_class_accuracy', 'mean_average_precision',
-            'mmit_mean_average_precision', 'recall_unknown', 'confusion_matrix'
+            'mmit_mean_average_precision', 'recall_unknown', 'confusion_matrix', 'sskmeans', 'logits'
         ]
 
         for metric in metrics:
@@ -241,6 +246,8 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
                 os_star, unk = cls_acc[:-1].mean(), cls_acc[-1]
                 H_mean_acc = 2 * os_star * unk / (os_star + unk)
                 eval_results['H_mean_class_accuracy'] = H_mean_acc
+                eval_results['os*'] = os_star
+                eval_results['recall_unknown'] = unk
                 log_msg = f'\nH_mean_acc\t{H_mean_acc:.4f} (OS* {os_star:.4f}, UNK: {unk:.4f})'
                 print_log(log_msg, logger=logger)
                 continue
@@ -263,7 +270,7 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
                     log_msg = f'\nmmit_mean_average_precision\t{mAP:.4f}'
                 print_log(log_msg, logger=logger)
                 continue
-            
+
             if metric == 'recall_unknown':
                 pred = np.argmax(results, axis=1)
                 conf = confusion_matrix(pred, gt_labels)
@@ -285,6 +292,39 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
                 log_msg = '\n' + s
                 print_log(log_msg, logger=logger)
                 continue
+
+            if metric == 'sskmeans':
+                raise NotImplementedError()
+                # val pipeline을 두 개로 만들거나 합친 filelist를 만들어서 자르는 지점을 알려줘야 함
+                Xs = None
+                anns = {
+                    'train_source': None,
+                    'train_target': None,
+                    'valid': None,
+                    'test': None,
+                }
+                best_H, best_k = 0, None
+                n_tries = metric_options.setdefault('k-means', {}).setdefault('n_tries', 1)  # default = {'k-means': {'n_tries': 1}}
+                for k in [*range(self.num_classes, self.num_classes+30), 50, 100]:
+                    for _ in range(n_tries):
+                        model, k, H, OS, OS_STAR, UNK = train(k, Xs, anns, self.num_classes)
+                        if H > best_H:
+                            best_H = H
+                            best_k = k
+                log_msg = f'\nbest_H\t{best_H} (best_k\t{best_k})'
+                eval_results['k-means'] = best_H
+                print_log(log_msg, logger=logger)
+                continue
+
+            if metric == 'logits':
+                p_out_dir = metric_options.get('logits', {}).get('p_out_dir', None)
+                assert p_out_dir is not None, "Specify the out dir in metric_options['logits']['p_out_dir']"
+                p_out = Path(p_out_dir) / 'logits' / f'{int(time.time())}.pkl'
+                p_out.parent.mkdir(exist_ok=True)
+                y_ = np.array(results)
+                with p_out.open('wb') as f:
+                    pickle.dump(y_, f)
+                log_msg = f'\nSaving logits at {str(p_out)}'
 
         return eval_results
 

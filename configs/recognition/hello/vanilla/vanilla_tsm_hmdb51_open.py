@@ -7,8 +7,7 @@ model = dict(
     type='Recognizer2D',
     backbone=dict(
         type='ResNetTSM',
-        pretrained='torchvision://resnet50',
-        # pretrained=None,
+        pretrained=None,
         depth=50,
         num_segments=8,
         norm_eval=False,
@@ -87,7 +86,7 @@ test_pipeline = [
 data = dict(
     videos_per_gpu=24,
     workers_per_gpu=4,
-    val_dataloader=dict(videos_per_gpu=2),
+    val_dataloader=dict(videos_per_gpu=20),
     train=dict(
         type='RawframeDataset',
         ann_file=ann_file_train,
@@ -127,8 +126,8 @@ total_epochs = 50
 checkpoint_config = dict(interval=10)
 evaluation = dict(
     interval=10,
-    metrics=['top_k_accuracy', 'mean_class_accuracy', 'confusion_matrix'],  # valid, test 공용으로 사용
-    save_best='mean_class_accuracy')
+    metrics=['top_k_accuracy', 'H_mean_class_accuracy', 'mean_class_accuracy', 'recall_unknown', 'confusion_matrix'],  # valid, test 공용으로 사용
+    save_best='H_mean_class_accuracy')
 log_config = dict(
     interval=7,  # every [ ] steps
     hooks=[
@@ -143,3 +142,7 @@ work_dir = 'work_dirs/hello/hmdb51/vanilla'
 load_from = 'https://download.openmmlab.com/mmaction/recognition/tsm/tsm_r50_256p_1x1x8_50e_kinetics400_rgb/tsm_r50_256p_1x1x8_50e_kinetics400_rgb_20200726-020785e2.pth'
 resume_from = None
 workflow = [('train', 1)]
+# disable opencv multithreading to avoid system being overloaded
+opencv_num_threads = 0
+# set multi-process start method as `fork` to speed up the training
+mp_start_method = 'fork'

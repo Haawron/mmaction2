@@ -9,6 +9,8 @@ import argparse
 import pickle
 import csv
 
+from slurm.utils.commons.patterns import get_p_target_workdir_name_with_jid
+
 
 # ex)
     # python slurm/osvm/osvm.py -n 5 -pf work_dirs/train_output/ek100/tsm/vanilla/P02/source-only/16847__vanilla_tsm_P02_source-only/0/20220402-053842/features -s P02 -t P02 -sp
@@ -22,7 +24,7 @@ def main():
 
     parser.add_argument('-j', '--jobid', type=int, default=None,
                         help='')
-                        
+
     parser.add_argument('-pf', '--p-feature-root', type=Path, default=Path('work_dirs/hello/ucf101/vanilla'),
                         help='')
     parser.add_argument('-s', '--source', type=str, default='ucf',
@@ -32,24 +34,32 @@ def main():
 
     parser.add_argument('-sp', '--save-preds', action='store_true',
                         help='')
+    parser.add_argument('-q', '--quiet', action='store_true',
+                        help='')
     args = parser.parse_args()
-    
+
     if args.jobid is not None:
-        p_feature_root, source, target = find_feature_path_from_jid(args.jobid)
+        p_feature_root = find_feature_path_from_jid(args.jobid)
     else:
         p_feature_root = args.p_feature_root
-        source, target = args.source, args.target
+    source, target = args.source, args.target
 
-    main_with_args(p_feature_root, source, target, args.num_classes, args.save_preds)
+    main_with_args(p_feature_root, source, target, args.num_classes, args.save_preds, args.quiet)
 
 
 def find_feature_path_from_jid(jobid:int) -> Path:
-    pass
+    p_target_workdir = get_p_target_workdir_name_with_jid(jobid)
+    assert p_target_workdir, 'invalid JID'
+    p_feature_root = list(p_target_workdir.glob('**/features'))
+    assert p_feature_root, f'Feature of {str(p_feature_root)} has not been extracted.'
+    p_feature_root = p_feature_root[0]
+    print(str(p_feature_root))
+    return p_feature_root
 
 
 def main_with_args(
     p_feature_root:Path, source:str, target:str,
-    num_classes:int, save_preds:bool=False
+    num_classes:int, save_preds:bool=False, quiet:bool=False
 ):
     # getting data and label
     # train: source closed
@@ -65,18 +75,19 @@ def main_with_args(
 
     # pre-train one-class SVMs
     sss, osvms = train_osvms(
-        num_classes, 
+        num_classes,
         data_train, label_train,
         data_valid, label_valid,
+        quiet
     )
-    
+
     # train P_I-SVM (OSVMs)
-    params = train_pi_svm(sss, osvms, data_train)  # not need valid: no model selection
+    params = train_pi_svm(sss, osvms, data_train, quiet)  # not need valid: no model selection
 
     # test P_I-SVM (OSVMs)
     priors = get_priors(label_train)
     (os_star, unk, H, mca, conf), omega, pred_test = test_pi_svm(num_classes, priors, sss, osvms, data_test, label_test, params)
-    
+
     # eval
     print(f'\nomega: {omega}')
     print(f'H: {100*H:.1f}  |  OS: {100*mca:.1f}  |  OS*: {100*os_star:.1f}  |  UNK: {100*unk:.1f}')
@@ -112,7 +123,7 @@ def get_label(source:str, target:str):
     domain2name = {'ucf': 'ucf101', 'hmdb': 'hmdb51', 'P02': 'ek100', 'P04': 'ek100', 'P22': 'ek100'}
     p_label_train, p_label_valid, p_label_test = (
         Path(rf'data/_filelists/{domain2name[source]}/filelist_{source}_train_open.txt'),
-        Path(rf'data/_filelists/{domain2name[target]}/filelist_{target}_valid_open.txt'),
+        Path(rf'data/_filelists/{domain2name[target]}/filelist_{target}_{"valid" if domain2name[target] == "ek100" else "val"}_open.txt'),
         Path(rf'data/_filelists/{domain2name[target]}/filelist_{target}_test_open.txt')
     )
     with p_label_train.open('r') as f_train, \
@@ -126,43 +137,52 @@ def get_label(source:str, target:str):
 
 
 def train_osvms(
-        num_classes, 
+        num_classes,
         data_train, label_train,
         data_valid, label_valid,
+        quiet=False
 ):
-    print('training osvms ...')
+    if not quiet:
+        print('training osvms ...')
     sss, osvms = [], []
     # gamma = [.5, .5, .2, .2, .2]
-    # C = [.1, .1, .1, .1, .1]
-    gamma = [.5, .5, .2, .2, .2]
-    C = [.5, .1, .1, .1, .1]
+    # C = [.5, .1, .1, .1, .1]
     for c in range(num_classes):
-        osvm, ss, acc = build_osvm_for_class_c(c, data_train, label_train, data_valid, label_valid, criterion=f1, gamma=gamma[c], C=C[c])
+        osvm, ss, acc = build_osvm_for_class_c(
+            c,
+            data_train, label_train,
+            data_valid, label_valid,
+            criterion=recall
+        )
         sss.append(ss)
         osvms.append(osvm)
-    print('done')
+    if not quiet:
+        print('done')
     return sss, osvms
 
 
-def train_pi_svm(sss, osvms, data_train):
-    print('training p_i-SVM (OSVMs) ...', end=' ')
+def train_pi_svm(sss, osvms, data_train, quiet=False):
+    if not quiet:
+        print('training p_i-SVM (OSVMs) ...', end=' ')
     # print()
     params = []
     threshold = 0  # over this, detected
     for c, (ss, osvm) in enumerate(zip(sss, osvms)):
         data_train = ss.transform(data_train)
         scores = get_pred_score_from_osvm(osvm, data_train)
-        n_positive_support_vectors = (scores[osvm.support_] > threshold).sum()  # (# of positive support vectors)
-        with np.printoptions(suppress=True, precision=5, linewidth=1000):
-            print(osvm.support_.shape, scores.shape, n_positive_support_vectors, scores[osvm.support_][:10])
+        n_positive_support_vectors = (scores[osvm.support_] > threshold).sum()
+        if not quiet:
+            with np.printoptions(suppress=True, precision=5, linewidth=1000):
+                print(osvm.support_.shape, scores.shape, n_positive_support_vectors, scores[osvm.support_][:10])
         scores = scores[scores > threshold] if (scores > threshold).any() else scores  # positive as detected
-        prob_c = 1.5 * n_positive_support_vectors  # 1.5 * (# of positive support vectors)
+        prob_c = 1.5 * n_positive_support_vectors
         # tau: loc
         # lambda: scale
         # kappa: c (in scipy docs)
         kappa_c, tau_c, lambda_c = weibull_min.fit(np.sort(scores)[:int(max(prob_c, 3))])
         params.append([kappa_c, tau_c, lambda_c])
-    print('done')
+    if not quiet:
+        print('done')
     return params
 
 
@@ -188,7 +208,7 @@ def test_pi_svm(
     pred_test = p.argmax(axis=1)
 
     curr_metric_score = 0
-    for delta in np.linspace(-3, 3, 200, endpoint=True):
+    for delta in np.logspace(-3, .2, 200, endpoint=True):
         pred_test_tmp = pred_test.copy()
         pred_test_tmp[p.max(axis=1) < delta] = num_classes  # reject
         os_star, unk, H, mca, conf = get_metric_scores(num_classes, pred_test_tmp, label_test)
@@ -213,7 +233,7 @@ def get_metric_scores(num_classes, pred_test, label_test):
     return os_star, unk, H, mca, conf
 
 
-def build_osvm_for_class_c(c, data_train, label_train, data_valid, label_valid, criterion, gamma=.2, C=.1):
+def build_osvm_for_class_c(c, data_train, label_train, data_valid, label_valid, criterion):
     data_train_c = data_train[label_train==c]
     ss = StandardScaler()
     ss.fit(data_train_c)
@@ -225,10 +245,12 @@ def build_osvm_for_class_c(c, data_train, label_train, data_valid, label_valid, 
     best_osvm = None
     best_valid_score = 0
     j_C, j_gamma = 0, 0
-    # for i_gamma, gamma in enumerate(np.logspace(-2, 1., 20//2, endpoint=False)):
-    #     for i_C, C in enumerate(np.logspace(-1., 1., 30//3, endpoint=True)):
-    for i_gamma, gamma in enumerate([gamma]):
-        for i_C, C in enumerate([C]):
+    # for i_gamma, gamma in enumerate(np.logspace(-2, 1., 20//2, endpoint=False)[-3:]):
+    #     for i_C, C in enumerate(np.logspace(-1., 1., 30//3, endpoint=True)[-2:-1]):
+    # for i_gamma, gamma in enumerate(np.arange(1, 6) / 10):
+    #     for i_C, C in enumerate(np.arange(1, 6) / 10):
+    for i_gamma, gamma in enumerate([.4]):
+        for i_C, C in enumerate([.4]):
             osvm = svm.SVC(gamma=gamma, kernel='rbf', C=C)
             osvm.fit(data_train, bin_label_train)
             pred = osvm.predict(data_valid)
@@ -300,7 +322,7 @@ def f1(preds, labels, positive_label=1):
         positive_label = np.unique(labels)[-1]  # the largest one
     positive_GT = (labels == positive_label).sum()
     positive_pred = (preds == positive_label).sum()
-    TP = ((preds == labels) & (labels == positive_label)).sum() 
+    TP = ((preds == labels) & (labels == positive_label)).sum()
     if TP == 0:
         return 0
     else:

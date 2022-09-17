@@ -49,5 +49,5 @@ python -m torch.distributed.launch --nproc_per_node=4 --master_port=$((10000+$RA
     --validate \
     --test-best --test-last
 
-echo done
+echo 'done'
 exit

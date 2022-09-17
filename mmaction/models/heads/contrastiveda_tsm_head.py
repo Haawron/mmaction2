@@ -5,7 +5,7 @@ import numpy as np
 
 from ..builder import HEADS
 from ...core import top_k_accuracy, confusion_matrix, mean_class_accuracy
-from .base import AvgConsensus, BaseHead, get_fc_block
+from .base import AvgConsensus, BaseDAContrastiveHead, get_fc_block
 
 
 class RunningAverage:
@@ -24,7 +24,7 @@ class RunningAverage:
 
 
 @HEADS.register_module()
-class ContrastiveDATSMHead(BaseHead):
+class ContrastiveDATSMHead(BaseDAContrastiveHead):
     def __init__(self,
             num_classes,
             in_channels,
@@ -133,7 +133,7 @@ class ContrastiveDATSMHead(BaseHead):
             # self.freeze_stages()
         else:
             super().train(mode)
-    
+
     def freeze_stages(self):
         for m in self.modules():
             for param in m.parameters():
@@ -141,8 +141,9 @@ class ContrastiveDATSMHead(BaseHead):
         for param in self.linear_head.parameters():
             param.requires_grad = True
 
-    def forward(self, f, num_segs, domains=None):
+    def forward(self, f, num_segs=None, domains=None):
         # 4N: source view 1,2,1,2,1,...,2, target view 1,2,1,2,1,...,2
+        # f: [2B*2*N*T, C_feat, 7, 7]
         if self.debias:
             f_2d = f  # [4N*segs, C, H, W]
             f_3d = f.view((-1, self.num_segments, *f.shape[-3:])).transpose(1, 2)  # [4N, C, segs, H, W]
@@ -177,87 +178,84 @@ class ContrastiveDATSMHead(BaseHead):
             result = torch.stack(self.zs, dim=1)  # [4N, 1~3, n_feat]
 
         else:
-            f = self.avg_pool(f)  # [4N*segs, C, 1, 1]
-            f = torch.flatten(f, start_dim=1)  # [4N*segs, C]
-            f = self.fc_feature(f)  # [4N*segs, n_feat]
-            f = f.view((-1, self.num_segments, f.shape[-1]))  # [4N, segs, n_feat]
-            f = self.consensus(f)  # [4N, 1, n_feat]
+            f = self.avg_pool(f)  # [2B*2*N*T, C_feat, 1, 1]
+            f = torch.flatten(f, start_dim=1)  # [2B*2*N*T, C_feat]
+            f = self.fc_feature(f)  # [2B*2*N*T, C_contra]
+            f = f.reshape(-1, self.num_segments, f.shape[-1])  # [2B*2*N, T, C_contra]
+            f = self.consensus(f)  # [2B*2*N, 1, C_contra]
             result = f
-        
+
         if self.linear_head_debug:
             # with torch.set_grad_enabled(True):  # turned off by recognizer2D
             #     result = self.linear_head(result.detach())
             result = self.linear_head(result)
-        
+
         return result
-        
-    
+
+
+    # def loss(self, cls_score, labels, domains, **kwargs):
+    #     """Calculate the loss given output ``cls_score``, target ``labels``.
+
+    #     Args:
+    #         cls_score (torch.Tensor): The output of the model. [2B*2(, N), 1~3, n_feat]
+    #         labels (torch.Tensor): The target output of the model.
+
+    #     Returns:
+    #         dict: A dict containing field 'loss_cls'(mandatory)
+    #         and 'topk_acc'(optional).
+    #     """
+
+    #     if labels.shape == torch.Size([]):
+    #         labels = labels.unsqueeze(0)
+    #     elif labels.dim() == 1 and labels.size()[0] == self.num_classes and cls_score.size()[0] == 1:
+    #         # Fix a bug when training with soft labels and batch size is 1.
+    #         # When using soft labels, `labels` and `cls_socre` share the same
+    #         # shape.
+    #         labels = labels.unsqueeze(0)
+
+    #     if self.linear_head_debug:
+    #         return {'loss_linear_head_debug': self.ce(cls_score[:,0,:], labels)}
+
+    #     losses = dict()
+    #     B = cls_score.shape[0] // 4
+    #     num_labeled = 2*B if self.loss_cls.unsupervised else -1
+
+    #     # centroids are needed only for scoring
+    #     self._update_centroids(cls_score[:num_labeled], labels[:num_labeled])
+    #     # log train scores
+    #     if not self.multi_class and cls_score.size() != labels.size():  # using hard label
+    #         losses['mca'] = self._get_train_mca(cls_score[:num_labeled], labels[:num_labeled])
+
+    #     if self.multi_class and self.label_smooth_eps != 0:
+    #         labels = (
+    #             (1 - self.label_smooth_eps) * labels
+    #             + self.label_smooth_eps / self.num_classes
+    #         )
+
+    #     if cls_score.dim() == 4:  # [2B*2, N, 1, n_feat]
+    #         loss_cls = self.loss_cls(cls_score[:,:,0,:], labels, domains, **kwargs)
+    #     else:  # [2B*2, 1~3, n_feat]
+    #         loss_cls = [self.loss_cls(cls_score[:,i], labels, domains, **kwargs) for i in range(cls_score.shape[1])]  # list of dicts
+    #         loss_cls = {k: sum([l[k] for l in loss_cls]) for k in ['loss_super', 'loss_unsuper'] if k in loss_cls[0]}  # sum each loss
+    #     losses.update(loss_cls)
+    #     if self.debias and (self.bias_input or self.bias_network):
+    #         loss_hsic = self._hsic_loss(kwargs['iter'])
+    #         losses['loss_hsic'] = loss_hsic
+
+    #     # kill as soon as the loss becomes NaN
+    #     if losses["loss_super"].isnan() or losses.get("loss_unsuper", torch.tensor(0)).isnan() or losses.get("loss_hsic", torch.tensor(0)).isnan():
+    #         # kill the parent process
+    #         import os
+    #         import signal
+    #         print('\n\n\nkill this training process due to nan values\n\n\n')
+    #         os.kill(os.getppid(), signal.SIGTERM)
+
+    #     return losses
     def loss(self, cls_score, labels, domains, **kwargs):
-        """Calculate the loss given output ``cls_score``, target ``labels``.
-
-        Args:
-            cls_score (torch.Tensor): The output of the model. [4N, 1~3, n_feat]
-            labels (torch.Tensor): The target output of the model.
-
-        Returns:
-            dict: A dict containing field 'loss_cls'(mandatory)
-            and 'topk_acc'(optional).
-        """
-
-        if labels.shape == torch.Size([]):
-            labels = labels.unsqueeze(0)
-        elif labels.dim() == 1 and labels.size()[0] == self.num_classes and cls_score.size()[0] == 1:
-            # Fix a bug when training with soft labels and batch size is 1.
-            # When using soft labels, `labels` and `cls_socre` share the same
-            # shape.
-            labels = labels.unsqueeze(0)
-
-        if self.linear_head_debug:
-            return {'loss_linear_head_debug': self.ce(cls_score[:,0,:], labels)}
-
-        losses = dict()
-        N = cls_score.shape[0] // 4
-        N_labeled = 2*N if self.loss_cls.unsupervised else -1
-
-        # centroids are needed only for scoring
-        if not self.with_given_centroids:
-            for c in range(self.num_classes):
-                self.centroids[c].update(cls_score[:N_labeled,0][labels[:N_labeled]==c])
-
-        if not self.multi_class and cls_score.size() != labels.size():
-            # log scores 
-            with torch.no_grad():
-                cls_score_labeled_view1 = cls_score[:N_labeled,0].unsqueeze(dim=1)  # [2N, 1, n_feat]
-                if not self.with_given_centroids:
-                    centroids = torch.stack([c.mean for c in self.centroids])
-                else:
-                    centroids = self.centroids
-                centroids = centroids.unsqueeze(dim=0)  # [1, k, n_feat]
-                distances = (cls_score_labeled_view1 - centroids) ** 2  # [2N, k, n_feat]
-                distances = distances.mean(dim=2) ** .5  # [2N, k]
-                mca = mean_class_accuracy(
-                    (-distances).detach().cpu().numpy(),  # score := negative distance 
-                    labels[:N_labeled].detach().cpu().numpy()
-                )
-                losses['mca'] = torch.tensor(mca, device=cls_score.device)
-
-        elif self.multi_class and self.label_smooth_eps != 0:
-            labels = ((1 - self.label_smooth_eps) * labels +
-                      self.label_smooth_eps / self.num_classes)
-
-        loss_cls = [self.loss_cls(cls_score[:,i], labels, domains, **kwargs) for i in range(cls_score.shape[1])]  # list of dicts
-        loss_cls = {k: sum([l[k] for l in loss_cls]) for k in ['loss_super', 'loss_unsuper'] if k in loss_cls[0]}  # sum each loss
-        losses.update(loss_cls)
+        losses = super().loss(cls_score, labels, domains, **kwargs)
         if self.debias and (self.bias_input or self.bias_network):
             loss_hsic = self._hsic_loss(kwargs['iter'])
             losses['loss_hsic'] = loss_hsic
-        # print(f'| {losses["loss_super"]:.3f}\t{losses["loss_unsuper"]:.3f}\t{losses["loss_hsic"]: .3f}')
-        if losses["loss_super"].isnan() or losses.get("loss_unsuper", torch.tensor(0)).isnan() or losses.get("loss_hsic", torch.tensor(0)).isnan():
-            # kill the parent process
-            import os
-            import signal
-            print('\n\n\nkill this training process due to nan values\n\n\n')
-            os.kill(os.getppid(), signal.SIGTERM)
         return losses
 
     def _hsic_loss(self, cur_iter: int):
@@ -271,6 +269,40 @@ class ContrastiveDATSMHead(BaseHead):
         mask = cur_iter % 2  # 0 or 1; training f and h alternatively
         loss = mask * loss_hsic_f + (1 - mask) * loss_hsic_h
         return self.hsic_factor * loss
+
+    # def _update_centroids(self, features, labels):
+    #     if not self.with_given_centroids:
+    #         for c in range(self.num_classes):
+    #             c_features = features[labels==c]  # [B*2(, N), 1~3, n_feat]
+    #             if features.dim() == 4:
+    #                 c_features = c_features[:,:,0].reshape(-1, features.shape[-1])  # [B*2*N, n_feat]
+    #             else:
+    #                 c_features = c_features[:,0]
+    #             self.centroids[c].update(c_features)
+
+    # def _get_train_mca(self, cls_score, labels):
+    #     with torch.no_grad():
+    #         logits = self._get_logits_from_features(cls_score)  # [B*2, C]
+    #         mca = mean_class_accuracy(
+    #             logits.detach().cpu().numpy(),  # score := negative distance
+    #             labels.detach().cpu().numpy()
+    #         )
+    #         return torch.tensor(mca, device=logits.device)
+
+    # def _get_logits_from_features(self, features):
+    #     if features.dim() == 4:  # [B*2, N, 1~3, n_feat]
+    #         features = features[:,0]  # [B*2, 1~3, n_feat]
+    #     elif features.dim() == 2:  # [B, n_feat]  (test)
+    #         features = features.unsqueeze(dim=1)  # [B, 1, n_feat]
+    #     features = features[:,:1]  # [B*2, 1, n_feat]
+    #     centroids = (
+    #         self.centroids if self.with_given_centroids
+    #         else torch.stack([c.mean for c in self.centroids])
+    #     )  # [C, n_feat]
+    #     centroids = centroids.unsqueeze(dim=0)  # [1, C, n_feat]
+    #     distances = (features - centroids) ** 2  # [B*2, C, n_feat]
+    #     distances = distances.mean(dim=2) ** .5  # [B*2, C]
+    #     return -distances
 
 
 class HSICLoss(torch.nn.Module):
@@ -297,7 +329,7 @@ class HSICLoss(torch.nn.Module):
         # compute the kernels
         kernel_XX = self._kernel(input1, sigma_x)
         kernel_YY = self._kernel(input2, sigma_y)
-        
+
         tK = kernel_XX - torch.diag(kernel_XX)
         tL = kernel_YY - torch.diag(kernel_YY)
         hsic = (

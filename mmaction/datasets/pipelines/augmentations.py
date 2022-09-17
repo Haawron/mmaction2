@@ -2,11 +2,15 @@
 import random
 import warnings
 from collections.abc import Sequence
+import os
+from pathlib import Path
+import csv
 
 import cv2
 import mmcv
 import numpy as np
 from mmcv.utils import digit_version
+from mmcv.fileio import FileClient
 from torch.nn.modules.utils import _pair
 
 from ..builder import PIPELINES
@@ -1903,3 +1907,77 @@ class MelSpectrogram:
                     f'n_mels={self.n_mels}, '
                     f'fixed_length={self.fixed_length})')
         return repr_str
+
+
+@PIPELINES.register_module()
+class BackgroundBlend:
+    def __init__(
+        self,
+        io_backend='disk', decoding_backend='cv2',
+        resize_h=256, crop_size=224,
+        p=.5,  # probability to apply
+        ann_files=[],
+        data_prefixes=[],
+        alpha=.5,  # blend ratio of origin image
+        blend_label=False
+    ):
+        # copied from RawFrameDecode
+        self.io_backend = io_backend
+        self.decoding_backend = decoding_backend
+        self.file_client = FileClient(self.io_backend)
+
+        # for BG augmentation
+        self.Resize1 = Resize((-1, resize_h))
+        self.CenterCrop = CenterCrop(crop_size)
+        self.Resize2 = Resize((crop_size, crop_size))
+
+        self.p = p
+
+        self.ann_files = list(map(Path, ann_files))
+        self.data_prefixes = list(map(Path, data_prefixes))
+        self.alpha = alpha
+        self.blend_label = blend_label
+        assert all(ann_file.is_file() for ann_file in self.ann_files)
+        assert all(data_prefix.is_dir() for data_prefix in self.data_prefixes)
+        assert 0 <= self.alpha <= 1 if type(self.alpha) == float else self.alpha == 'random'
+
+        self.bg_paths = []
+        self.bg_labels = []
+        for data_prefix, ann_file in zip(self.data_prefixes, self.ann_files):
+            with ann_file.open('r') as f:
+                ann = list(csv.reader(f, delimiter=' '))
+            self.bg_paths += [(data_prefix / line[0]).with_suffix('.jpg') for line in ann]
+            self.bg_labels += [int(line[-1]) for line in ann]
+        self.num_bg = len(self.bg_paths)
+
+    def __call__(self, results):
+        if np.random.rand() > self.p:  # w.p 1-p
+            return results
+        mmcv.use_backend(self.decoding_backend)
+        imgs = results['imgs']  # list(T) of imgs(HxWxC)
+        imgs = [img.astype(np.float32) for img in imgs]
+
+        bg_idx = np.random.choice(self.num_bg)
+        bg_img = self._open_img(self.bg_paths[bg_idx])
+        bg_img = self._augment_bg(bg_img)
+        alpha = self.alpha if type(self.alpha) == float else np.random.rand()
+        imgs = [alpha * img + (1 - alpha) * bg_img for img in imgs]
+
+        imgs = [img.astype(np.uint8) for img in imgs]  # 혹시 몰라서 원복
+        results['imgs'] = imgs
+        if self.blend_label:
+            bg_label = self.bg_labels[bg_idx]
+            results['label'] = self.alpha * results['label'] + (1 - self.alpha) * bg_label
+        return results
+
+    def _open_img(self, path):
+        path = str(path)
+        img_bytes = self.file_client.get(path)
+        img = mmcv.imfrombytes(img_bytes, channel_order='rgb')
+        return img
+
+    def _augment_bg(self, bg_img):
+        results = self.Resize1({'imgs': [bg_img]})
+        results = self.CenterCrop(results)
+        results = self.Resize2(results)
+        return results['imgs'][0]

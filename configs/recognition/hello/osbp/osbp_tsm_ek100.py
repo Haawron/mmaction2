@@ -5,7 +5,7 @@ num_classes = 5+1  # 1: unknown
 domain_adaptation = True
 
 model = dict(
-    type='DARecognizer2d',
+    type='DARecognizer2D',
     backbone=dict(
         type='ResNetTSM',
         pretrained='torchvision://resnet50',

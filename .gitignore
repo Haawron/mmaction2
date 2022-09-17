@@ -142,6 +142,7 @@ mmaction/.mim
 
 ################################################################
 logs/
-hello.py
+slurm/hello.*
 tmp/
 failure_modes_visualized/
+visualizations/

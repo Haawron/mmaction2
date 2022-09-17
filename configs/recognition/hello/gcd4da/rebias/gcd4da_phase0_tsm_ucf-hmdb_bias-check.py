@@ -5,7 +5,7 @@ domain_adaptation = False  # True to use DomainAdaptationRunner
 find_unused_parameters = True
 
 model = dict(
-    type='DARecognizer2d',
+    type='DARecognizer2D',
     backbone=dict(
         type='ResNetTSM',
         pretrained='torchvision://resnet50',
@@ -31,7 +31,7 @@ model = dict(
         debias=True,
         bias_input=False,
         bias_network=False,
-        debias_last=True, 
+        debias_last=True,
         hsic_factor=.01,
 
         linear_head=dict(num_classes=365),

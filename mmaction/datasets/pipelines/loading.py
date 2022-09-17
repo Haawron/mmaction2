@@ -272,25 +272,32 @@ class SampleFrames:
 
 @PIPELINES.register_module()
 class COPSampleFrames(SampleFrames):
-    def __init__(self,
-                 num_clips=3,
-                 clip_len=16,  # frames / clip
-                 clip_interval=8,
-                 frame_interval=1):
+    def __init__(
+        self,
+        num_clips=3,
+        clip_len=16,  # frames / clip
+        clip_interval=8,
+        frame_interval=1,
+        test_mode=False,
+    ):
         self.num_clips = num_clips
         self.clip_len = clip_len
         self.clip_interval = clip_interval
         self.frame_interval = frame_interval
+        self.test_mode = test_mode
 
     def __call__(self, results):
         total_frames = results['total_frames']
-        single_clip_range = (self.clip_len - 1) * self.frame_interval + 1  # k = d_f(l-1) + 1 
-        total_range = self.num_clips * single_clip_range + (self.clip_interval - 1) * (self.num_clips - 1)  # kN + (d_c-1)(N-1)
-        offset_start = np.random.randint(max(total_frames-total_range, 1))
+        single_clip_range = (self.clip_len - 1) * self.frame_interval + 1  # k = (T-1) * interval_frame + 1
+        total_range = self.num_clips * single_clip_range + (self.clip_interval - 1) * (self.num_clips - 1)  # Nk + (interval_clip-1)(N-1)
+        if self.test_mode:  # val, test
+            offset_start = max(total_frames-total_range//2, 0)
+        else:  # train
+            offset_start = np.random.randint(max(total_frames-total_range, 1))  # int < high
         clip_offsets = offset_start + (single_clip_range + self.clip_interval - 1) * np.arange(self.num_clips)  # [N]
-        frame_inds = clip_offsets[:,None] + self.frame_interval * np.arange(self.clip_len)[None,:]  # [N, d_f*l]
-        frame_inds[frame_inds >= total_frames] = total_frames -1  # repeating the last frame
-        frame_inds = frame_inds.reshape(-1)  # [N*d_f*l]
+        frame_inds = clip_offsets[:,None] + self.frame_interval * np.arange(self.clip_len)[None,:]  # [N, interval_frame*T]
+        frame_inds[frame_inds >= total_frames] = total_frames - 1  # repeating the last frame
+        frame_inds = frame_inds.reshape(-1)  # [N*interval_frame*T]
 
         start_index = results['start_index']
         frame_inds += start_index
@@ -299,7 +306,7 @@ class COPSampleFrames(SampleFrames):
         results['frame_interval'] = self.frame_interval
         results['num_clips'] = self.num_clips
         return results
-        
+
     def __repr__(self):
         repr_str = (
             f'{self.__class__.__name__}('
@@ -309,7 +316,7 @@ class COPSampleFrames(SampleFrames):
             f'frame_interval={self.frame_interval})'
         )
         return repr_str
-        
+
 
 @PIPELINES.register_module()
 class UntrimmedSampleFrames:

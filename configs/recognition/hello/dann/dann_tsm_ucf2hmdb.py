@@ -5,7 +5,7 @@ num_classes = 12
 domain_adaptation = True
 
 model = dict(
-    type='DARecognizer2d',
+    type='DARecognizer2D',
     backbone=dict(
         type='ResNetTSM',
         pretrained=None,
@@ -105,6 +105,7 @@ data = dict(
             data_prefix=data_prefix_source,
             start_index=1,  # frame number starts with
             filename_tmpl='img_{:05}.jpg',
+            sample_by_class=True,
             pipeline=train_pipeline),
         dict(
             type='RawframeDataset',
@@ -158,7 +159,11 @@ annealing_runner = False
 # runtime settings
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = 'work_dirs/hello/ucf-hmdb/DANN'
-load_from = 'work_dirs/hello/ucf101/vanilla/best_mean_class_accuracy_epoch_40.pth'
+work_dir = 'work_dirs/hello/ucf2hmdb/DANN'
+load_from = 'work_dirs/train_output/ucf2hmdb/tsm/vanilla/source-only/4380__vanilla-tsm-ucf2hmdb-source-only/4/20220728-204923/best_mean_class_accuracy_epoch_20.pth'
 resume_from = None
 workflow = [('train', 1)]
+# disable opencv multithreading to avoid system being overloaded
+opencv_num_threads = 0
+# set multi-process start method as `fork` to speed up the training
+mp_start_method = 'fork'

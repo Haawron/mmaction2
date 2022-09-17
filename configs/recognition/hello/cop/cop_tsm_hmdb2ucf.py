@@ -11,7 +11,7 @@ find_unused_parameters = False  # True to resolve the issue when Freeze & dist
 
 
 model = dict(
-    type='DARecognizer2d',
+    type='DARecognizer2D',
     backbone=dict(
         type='ResNetTSM',
         pretrained=None,
@@ -156,6 +156,9 @@ checkpoint_config = dict(interval=100)
 evaluation = dict(
     interval=5,
     metrics=['top_k_accuracy', 'mean_class_accuracy', 'confusion_matrix'],  # valid, test 공용으로 사용
+    metric_options=dict(
+        top_k_accuracy=dict(topk=(1, 5)),
+        use_predefined_labels=True),
     save_best='mean_class_accuracy')
 log_config = dict(
     interval=30,  # every [ ] steps

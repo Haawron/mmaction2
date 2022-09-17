@@ -8,16 +8,16 @@ import torch.nn as nn
 from ...core import top_k_accuracy, mean_class_accuracy
 from ..builder import build_loss
 
-        
+
 def get_fc_block(c_in, c_out, num_layers, dropout_ratio):
     fc_block = []
+    diff = (c_out - c_in) // num_layers
+    c_in_tmp = c_in
     for i in range(num_layers):
-        if i < num_layers - 1:
-            c_out_ = c_in // 2**(i+1)
-            fc = nn.Linear(c_in//2**i, c_out_)
-        else:
-            c_out_= c_out
-            fc = nn.Linear(c_in//2**(num_layers-1), c_out_)
+        c_out_tmp = c_in + i*diff if i < num_layers - 1 else c_out
+        fc = nn.Linear(c_in_tmp, c_out_tmp)
+        c_in_tmp = c_out_tmp
+
         dropout = nn.Dropout(p=dropout_ratio) if dropout_ratio > 0 else nn.Identity()
         act = nn.ReLU() if i < num_layers - 1 else nn.Identity()
         fc_block += [fc, dropout, act]
@@ -135,7 +135,7 @@ class BaseHead(nn.Module, metaclass=ABCMeta):
         elif self.multi_class and self.label_smooth_eps != 0:
             labels = ((1 - self.label_smooth_eps) * labels +
                       self.label_smooth_eps / self.num_classes)
-        
+
         if self.print_mca:
             mca = self.calc_mca(cls_score, labels)
             losses['mca'] = mca
@@ -170,3 +170,103 @@ class BaseHead(nn.Module, metaclass=ABCMeta):
         else:
             # [N, num_segs, num_classes]
             return x.view((-1, self.num_segments) + x.size()[1:])
+
+
+class BaseDAContrastiveHead(BaseHead):
+    def loss(self, cls_score, labels, domains, **kwargs):
+        """Calculate the loss given output ``cls_score``, target ``labels``.
+
+        Args:
+            cls_score (torch.Tensor): The output of the model. [2B*2(, N), 1~3, n_feat]
+            labels (torch.Tensor): The target output of the model.
+
+        Returns:
+            dict: A dict containing field 'loss_cls'(mandatory)
+            and 'topk_acc'(optional).
+        """
+
+        if labels.shape == torch.Size([]):
+            labels = labels.unsqueeze(0)
+        elif labels.dim() == 1 and labels.size()[0] == self.num_classes and cls_score.size()[0] == 1:
+            # Fix a bug when training with soft labels and batch size is 1.
+            # When using soft labels, `labels` and `cls_socre` share the same
+            # shape.
+            labels = labels.unsqueeze(0)
+
+        # if self.linear_head_debug:
+        #     return {'loss_linear_head_debug': self.ce(cls_score[:,0,:], labels)}
+
+        losses = dict()
+        B = cls_score.shape[0] // 4
+        num_labeled = 2*B if self.loss_cls.unsupervised else -1
+
+        # centroids are needed only for scoring
+        self._update_centroids(cls_score[:num_labeled], labels[:num_labeled])
+        # log train scores
+        if not self.multi_class and cls_score.size() != labels.size():  # using hard label
+            losses['mca'] = self._get_train_mca(cls_score[:num_labeled], labels[:num_labeled])
+
+        if self.multi_class and self.label_smooth_eps != 0:
+            labels = self._smoothen_labels(labels)
+
+        if cls_score.dim() == 4:  # [2B*2, N, 1, n_feat]
+            loss_cls = self.loss_cls(cls_score[:,:,0,:], labels, domains, **kwargs)
+        else:  # [2B*2, 1~3, n_feat]
+            loss_cls = [self.loss_cls(cls_score[:,i], labels, domains, **kwargs) for i in range(cls_score.shape[1])]  # list of dicts
+            loss_cls = {k: sum([l[k] for l in loss_cls]) for k in ['loss_super', 'loss_unsuper'] if k in loss_cls[0]}  # sum each loss
+        losses.update(loss_cls)
+
+        # kill as soon as any of losses becomes NaN
+        # if losses["loss_super"].isnan() or losses.get("loss_unsuper", torch.tensor(0)).isnan() or losses.get("loss_hsic", torch.tensor(0)).isnan():
+        if any(losses[loss_name].isnan() for loss_name in [loss_name for loss_name in losses.keys() if 'loss_' in loss_name]):
+            # kill the parent process
+            import os
+            import signal
+            print('\n\n\nkill this training process due to nan values\n\n\n')
+            os.kill(os.getppid(), signal.SIGTERM)
+
+        return losses
+
+    def _update_centroids(self, features, labels):
+        if not self.with_given_centroids:
+            for c in range(self.num_classes):
+                c_features = features[labels==c]  # [B*2(, N), 1~3, n_feat]
+                if features.dim() == 4:
+                    c_features = c_features[:,:,0].reshape(-1, features.shape[-1])  # [B*2*N, n_feat]
+                else:
+                    c_features = c_features[:,0]
+                self.centroids[c].update(c_features)
+
+    def _get_train_mca(self, cls_score, labels):
+        with torch.no_grad():
+            logits = self._get_logits_from_features(cls_score)  # [B*2, C]
+            mca = mean_class_accuracy(
+                logits.detach().cpu().numpy(),  # score := negative distance
+                labels.detach().cpu().numpy()
+            )
+            return torch.tensor(mca, device=logits.device)
+
+    def _get_logits_from_features(self, features):
+        if features.dim() == 4:  # [B*2, N, 1~3, n_feat]
+            features = features[:,0]  # [B*2, 1~3, n_feat]
+        elif features.dim() == 2:  # [B, n_feat]  (test, or transformers)
+            features = features.unsqueeze(dim=1)  # [B, 1, n_feat]
+        features = features[:,:1]  # [B*2, 1, n_feat]
+        centroids = (
+            self.centroids if self.with_given_centroids
+            else torch.stack([c.mean for c in self.centroids])
+        )  # [C, n_feat]
+        centroids = centroids.unsqueeze(dim=0)  # [1, C, n_feat]
+        distances = (features - centroids) ** 2  # [B*2, C, n_feat]
+        distances = distances.mean(dim=2) ** .5  # [B*2, C]
+        return -distances
+
+    def _smoothen_labels(self, labels):
+        smooth_labels = (
+            (1 - self.label_smooth_eps) * labels
+            + self.label_smooth_eps / self.num_classes
+        )
+        return smooth_labels
+
+    def _get_loss(self, cls_score, labels, domains, **kwargs):
+        pass

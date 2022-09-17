@@ -115,8 +115,8 @@ total_epochs = 50
 checkpoint_config = dict(interval=10)
 evaluation = dict(
     interval=5,
-    metrics=['top_k_accuracy', 'H_mean_class_accuracy', 'mean_class_accuracy', 'confusion_matrix'],  # valid, test 공용으로 사용
-    save_best='mean_class_accuracy')
+    metrics=['top_k_accuracy', 'H_mean_class_accuracy', 'mean_class_accuracy', 'recall_unknown', 'confusion_matrix'],  # valid, test 공용으로 사용
+    save_best='H_mean_class_accuracy')
 log_config = dict(
     interval=10,  # every [ ] steps
     hooks=[

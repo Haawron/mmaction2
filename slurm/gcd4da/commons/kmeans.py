@@ -1,29 +1,43 @@
 import pickle
 from pathlib import Path
+from collections import defaultdict
 from semi_kmeans import KMeans as SemiKMeans
 import numpy as np
 import pandas as pd
 import csv
 import argparse
 import re
+import os
 from multiprocessing import Pool
+from slurm.utils.commons.patterns import get_full_infodict_from_jid
+
+
+SPLIT_NAMES = ['train_source', 'train_target', 'valid', 'test']
+
+METRIC_H, METRIC_OS, METRIC_OS_STAR, METRIC_UNK = 'H', 'OS', 'OS*', 'UNK'
+METRIC_ALL, METRIC_OLD, METRIC_NEW = 'ALL', 'Old', 'New'
+VOSUDA_METRICS = [METRIC_H, METRIC_OS, METRIC_OS_STAR, METRIC_UNK]
+CDAR_METRICS = [METRIC_ALL, METRIC_OLD, METRIC_NEW]
 
 
 def main():
     parser = argparse.ArgumentParser(description='')
     parser.add_argument(
-        '-r', '--root-dir',
-        default=Path(r'work_dirs/sanity/ek100/tsm/GCD4DA/P02_P04/19390__GCD4DA_tsm_ek100_sanity_one_way_phase1/0/20220509-222653'),
-        type=Path, help='')
+        '-j', '--jid', default=None,
+        help=''
+    )
     parser.add_argument(
         '-c', '--create-filelist', action='store_true',
+        help='')
+    parser.add_argument(
+        '-n', '--n-tries', type=int, default=5,
         help='')
     args = parser.parse_args()
 
     np.random.seed(999)  # numpy & sklearn
-    n_tries = 5
 
-    p_root = args.root_dir
+    # p_root = args.root_dir
+    p_root = Path(get_full_infodict_from_jid(args.jid)['config']).parent
     source, target = re.findall(r'/([\w^_]{1,4})[2_-]([\w^_]{1,4})/', str(p_root))[0] or [('P02', 'P04')]
     print(f'Task: {source} -> {target}')
     num_classes = (
@@ -35,17 +49,18 @@ def main():
     for key in Xs.keys():
         print(f'{key:12s}\t{anns[key].shape} {Xs[key].shape}')
 
-    print(f'\nTraining k-means models n_tries={n_tries} ...', end=' ')
-    global_best_model, ks, rows_H, rows_os, rows_os_star, rows_unk = train_wrapper(Xs, anns, num_classes, n_tries)
+    print(f'\nTraining k-means models n_tries={args.n_tries} ...', end=' ')
+    # global_best_model, ks, rows_H, rows_os, rows_os_star, rows_unk = train_wrapper(Xs, anns, num_classes, n_tries)
+    global_best_model, ks, rows = train_wrapper(Xs, anns, num_classes, args.n_tries)
     print('done\n')
 
-    mi_columns = pd.MultiIndex.from_product([['train_source', 'train_target', 'valid', 'test'], ['H', 'OS', 'OS*', 'UNK']], names=['split', 'mode'])
-    records = {k: sum([[row_H[key], row_os[key], row_os_star[key], row_unk[key]] for key in row_os.keys()], []) for k, row_H, row_os, row_os_star, row_unk in zip(ks, rows_H, rows_os, rows_os_star, rows_unk)}
-    df = pd.DataFrame.from_dict(records, columns=mi_columns, orient='index')
+    mi_columns = pd.MultiIndex.from_product([SPLIT_NAMES, VOSUDA_METRICS], names=['split', 'mode'])
+    df = pd.DataFrame.from_dict({k: row for k, row in zip(ks, rows)}, columns=mi_columns, orient='index')
     with pd.option_context('display.precision', 1):
         print(df)
 
     if args.create_filelist:
+        print('\n\n')
         p_out = p_root / f'filelist_pseudo_{target}_k{global_best_model.k:03d}.txt'
         create_filelist(
             global_best_model,
@@ -73,13 +88,13 @@ def create_filelist(model, X_train_target, p_ann_train_target, p_out):
         writer = csv.writer(f_out, delimiter=' ')
         for line, pseudo_label in zip(reader, pseudo_labels):
             writer.writerow(line[:-1] + [pseudo_label])
-    print(f'\n\nCreated a filelist in {p_out}.\n')
+    print(f'Created a filelist in {p_out}.\n')
 
 def create_centroids(model, p_out):
     with p_out.open('wb') as f_cent:
         pickle.dump(model.centroids, f_cent)
     print(f'Created a centroid file in {p_out}.\n')
-    
+
 
 def get_input_and_output(p_root, source, target, num_classes=5):
     anns = {}
@@ -93,14 +108,11 @@ def get_input_and_output(p_root, source, target, num_classes=5):
     p_dir_filelist = Path(r'data/_filelists')
     p_anns = [
         p_dir_filelist / domain2dataset[source] / f'filelist_{source}_train_open.txt',  # to extract only closed
-        p_dir_filelist / domain2dataset[target] / f'filelist_{target}_train_open.txt',
-        p_dir_filelist / domain2dataset[target] / f'filelist_{target}_{"valid" if domain2dataset[target] == "epic-kitchens-100" else "val"}_open.txt',
-        p_dir_filelist / domain2dataset[target] / f'filelist_{target}_test_open.txt'
+        p_dir_filelist / domain2dataset[target] / f'filelist_{target}_train_open_all.txt',
+        p_dir_filelist / domain2dataset[target] / f'filelist_{target}_{"valid" if domain2dataset[target] == "epic-kitchens-100" else "val"}_open_all.txt',
+        p_dir_filelist / domain2dataset[target] / f'filelist_{target}_test_open_all.txt'
     ]
-    for split_name, p_ann in zip(
-        ['train_source', 'train_target', 'valid', 'test'],
-        p_anns
-    ):
+    for split_name, p_ann in zip(SPLIT_NAMES, p_anns):
         with p_ann.open('r') as f:
             reader = csv.reader(f, delimiter=' ')
             ann = [int(line[-1]) for line in reader]
@@ -109,8 +121,7 @@ def get_input_and_output(p_root, source, target, num_classes=5):
 
     Xs = {}
     for split_name, p_feature in zip(
-        ['train_source', 'train_target', 'valid', 'test'],
-        [
+        SPLIT_NAMES, [
             p_root / f'features/{source}_train_open.pkl',
             p_root / f'features/{target}_train_open.pkl',
             p_root / f'features/{target}_val_open.pkl',
@@ -126,63 +137,108 @@ def get_input_and_output(p_root, source, target, num_classes=5):
         Xs[split_name] = X
         f.close()
 
+    # to make closed
     Xs['train_source'] = Xs['train_source'][anns['train_source']<num_classes]
     anns['train_source'] = anns['train_source'][anns['train_source']<num_classes]
     return Xs, anns, p_anns
 
 
 def train_wrapper(Xs, anns, num_classes=5, n_tries=20):
-    ks = list(range(num_classes, num_classes+11)) + [30, 50, 100]
+    ks = set(range(num_classes, num_classes+20)) | {30, 50, 100}
+    ks = sorted(ks)
     jobs = []
     for k in ks:
-        for _ in range(n_tries):
+        for n in range(n_tries):
             jobs.append({
                 'k': k,
                 'Xs': Xs,
                 'anns': anns,
                 'num_classes': num_classes,
+                'seed': 5236 * n,
             })
-    # results = {k: {'scores_os': {'test': 0}} for k in ks}
-    results = {k: {'scores_H': {'test': 0}} for k in ks}  # init 
-    with Pool() as p:
-        for model, k, scores_H, scores_os, scores_os_star, scores_unk in p.imap_unordered(worker, jobs):
-            # if results[k]['scores_os']['test'] < scores_os['test']:
-            if results[k]['scores_H']['test'] <= scores_H['test']:
-                results[k] = {
-                    'model': model,
-                    'scores_H': scores_H,
-                    'scores_os': scores_os,
-                    'scores_os_star': scores_os_star,
-                    'scores_unk': scores_unk,
-                }
+    # results = {
+    #     12: {
+    #         'scores_H': [
+    #             [88.7, 88.3, 75.4, 77.8],  # train_source, train_target, valid, test
+    #             [88.7, 88.3, 75.4, 77.8],
+    #             ...
+    #         ],
+    #         'scores_os': [
+    #             ...
+    #         ],
+    #         'scores_os_star': [
+    #             ...
+    #         ],
+    #         'scores_unk': [
+    #             [88.7, 88.3, 75.4, 77.8],  # train_source, train_target, valid, test
+    #             [88.7, 88.3, 75.4, 77.8],
+    #             ...
+    #         ],
+    #     },
+    #     ...
+    # }
+    # dict of dicts of lists of dicts
+    results = defaultdict(lambda: defaultdict(list))
+    global_best_test_score = 0
+    global_best_k = None
+    with Pool(int(os.environ.get('SLURM_CPUS_ON_NODE', 8))) as p:
+        for model, k, scores in p.imap_unordered(worker, jobs):
+            if global_best_test_score < scores[0]['test']:  # scores[0]: head metric
+                global_best_test_score = scores[0]['test']
+                global_best_model = model
+                global_best_k = k
+            for metric, score in zip(VOSUDA_METRICS, scores):
+                results[k][metric].append(list(score.values()))
+        # for model, k, scores_H, scores_os, scores_os_star, scores_unk in p.imap_unordered(worker, jobs):
+        #     if global_best_test_score < scores_H['test']:
+        #         global_best_test_score = scores_H['test']
+        #         global_best_model = model
+        #         global_best_k = k
+        #     results[k]['scores_H'].append(list(scores_H.values()))
+        #     results[k]['scores_os'].append(list(scores_os.values()))
+        #     results[k]['scores_os_star'].append(list(scores_os_star.values()))
+        #     results[k]['scores_unk'].append(list(scores_unk.values()))
     p.join()
 
-    rows_H, rows_os, rows_os_star, rows_unk = [], [], [], []
+    # rows_H = [
+    #     [33.7, 33.7, 33.7, 33.7],  # train_source, train_target, valid, test
+    #     ...  # for all k's
+    # ]
+    rows = []
     for k in ks:
-        rows_H.append(results[k]['scores_H'])
-        rows_os.append(results[k]['scores_os'])
-        rows_os_star.append(results[k]['scores_os_star'])
-        rows_unk.append(results[k]['scores_unk'])
-    # global_best_k = max(ks, key=lambda k: results[k]['scores_os']['test'])
-    # global_best_test_score = results[global_best_k]['scores_os']['test']
-    global_best_k = max(ks, key=lambda k: results[k]['scores_H']['test'])
-    global_best_test_score = results[global_best_k]['scores_H']['test']
-    global_best_model = results[global_best_k]['model']
+        means = np.concatenate([
+            np.mean(results[k][metric], axis=0, keepdims=True)
+            for metric in VOSUDA_METRICS
+            # np.mean(results[k]['scores_H'], axis=0, keepdims=True),
+            # np.mean(results[k]['scores_os'], axis=0, keepdims=True),
+            # np.mean(results[k]['scores_os_star'], axis=0, keepdims=True),
+            # np.mean(results[k]['scores_unk'], axis=0, keepdims=True),
+        ], axis=0).T.reshape(-1).tolist()
+        # stddevs = np.concatenate([
+        #     np.std(results[k]['scores_H'], axis=0, keepdims=True),
+        #     np.std(results[k]['scores_os'], axis=0, keepdims=True),
+        #     np.std(results[k]['scores_os_star'], axis=0, keepdims=True),
+        #     np.std(results[k]['scores_unk'], axis=0, keepdims=True),
+        # ], axis=0).T.reshape(-1)  # 5 ~ 7 정도 남
+        rows.append(means)
+    # TODO: global best model은 뭘 보고 뽑음? best k -> best model?
     print(f'\nbest test score {global_best_test_score:.1f} at k={global_best_k}')
-    return global_best_model, ks, rows_H, rows_os, rows_os_star, rows_unk
+    return global_best_model, ks, rows
 
 
 def worker(job:dict):
     return train(**job)
 
 
-def train(k, Xs, anns, num_classes):
-    model = get_semi_kmeans_model(k, Xs, anns, num_classes)
-    scores_H = get_model_score(model, Xs, anns, num_classes, 'H', False)
-    scores_os = get_model_score(model, Xs, anns, num_classes, 'os', False)  # score dict for each split
-    scores_os_star = get_model_score(model, Xs, anns, num_classes, 'os*', False)
-    scores_unk = get_model_score(model, Xs, anns, num_classes, 'unk', False)
-    return model, k, scores_H, scores_os, scores_os_star, scores_unk
+def train(k, Xs, anns, num_classes, seed):
+    model = get_semi_kmeans_model(k, Xs, anns, num_classes, seed)
+    scores = [get_model_score(model, Xs, anns, num_classes, metric, False) for metric in VOSUDA_METRICS]
+    # scores_H = get_model_score(model, Xs, anns, num_classes, 'H', False)
+    # scores_os = get_model_score(model, Xs, anns, num_classes, 'os', False)  # score dict for each split
+    # scores_os_star = get_model_score(model, Xs, anns, num_classes, 'os*', False)
+    # scores_unk = get_model_score(model, Xs, anns, num_classes, 'unk', False)
+    # return model, k, scores_H, scores_os, scores_os_star, scores_unk
+    return model, k, scores
 
 
 def cosine(X, y, norm_X=None):
@@ -193,13 +249,13 @@ def cosine(X, y, norm_X=None):
     return sim
 
 
-def get_semi_kmeans_model(k, Xs, anns, num_classes=5):
+def get_semi_kmeans_model(k, Xs, anns, num_classes=5, seed=1234):
     known_data = [
         np.where(anns['train_source'] == i)[0].astype(np.int64)
         for i in range(num_classes)
     ]  # data indices for each cluster
     X = np.concatenate([Xs['train_source'], Xs['train_target']], axis=0)
-    model = SemiKMeans(k=k, known_data=known_data, alpha=0.3, verbose=False, metric='cosine', tol=1e-7).fit(X)
+    model = SemiKMeans(k=k, known_data=known_data, alpha=0.3, verbose=False, metric='cosine', tol=1e-7, seed=seed).fit(X)
     return model
 
 
@@ -207,7 +263,7 @@ def get_kmeans_model(k, Xs, anns, num_classes=5):
     from sklearn.cluster import KMeans
     # 1. get initial centroids
     # 1-1. semi. k-means: centroids are mean vector for each class for labeled data
-    centroids = [] 
+    centroids = []
     centroid_args = []
     for c in range(num_classes):
         ann_train_source_closed = anns['train_source'][anns['train_source'] != num_classes]
@@ -227,16 +283,20 @@ def get_kmeans_model(k, Xs, anns, num_classes=5):
         centroid_arg = np.random.choice(X.shape[0], p=d/d.sum())
         centroid_args.append(centroid_arg)
         new_centroid = X[centroid_arg]
-        centroids.append(new_centroid) 
+        centroids.append(new_centroid)
     centroids = np.array(centroids)
     # 2. train
     model = KMeans(n_clusters=k, init=centroids, n_init=1, tol=1e-7).fit(X)
     return model
 
 
-def get_model_score(model, Xs, anns, num_classes=5, mode='os', verbose=True):
+def _get_model_score_(confmat, mode=METRIC_H):
+    pass
+
+def get_model_score(model, Xs, anns, num_classes=5, mode=METRIC_H, verbose=True):
+    assert mode in VOSUDA_METRICS
     scores = {}
-    for split_name in ['train_source', 'train_target', 'valid', 'test']:
+    for split_name in SPLIT_NAMES:
         if verbose:
             print(split_name.split('_')[0])
 
@@ -249,14 +309,14 @@ def get_model_score(model, Xs, anns, num_classes=5, mode='os', verbose=True):
 
         recalls = conf.diagonal() / conf.sum(axis=1)
         score = 100 * (
-            recalls[:num_classes].mean() if mode == 'os*'
+            recalls[:num_classes].mean() if mode == METRIC_OS_STAR
             else (
                 0 if len(recalls) == num_classes or recalls[:num_classes].mean() * recalls[num_classes] == 0
                 else 2 / ((1 / recalls[:num_classes].mean()) + (1 / recalls[num_classes]))
-            )  if mode == 'H'
-            else np.NaN if split_name == 'train_source' and mode in ['os', 'unk']
-            else recalls.mean() if mode == 'os'
-            else recalls[num_classes].mean() if mode == 'unk'
+            )  if mode == METRIC_H
+            else np.NaN if split_name == 'train_source' and mode in [METRIC_OS, METRIC_UNK]
+            else recalls.mean() if mode == METRIC_OS
+            else recalls[num_classes].mean() if mode == METRIC_UNK
             else np.NaN
         )
         scores[split_name] = score

@@ -8,16 +8,16 @@ from functools import reduce
 
 class KMeans(object):
 
-    def __init__(self, k, tol=0.0001, max_iter=30, metric='euclidean', known_data=None, alpha=0.5, verbose=False):
+    def __init__(self, k, tol=0.0001, max_iter=30, metric='euclidean', known_data=None, alpha=0.5, seed=1234, verbose=False):
         """
             :param k: The number of clusters
             :param threshold: The convergance threshold (default: 0.0001)
             :param max_iter: The max number of iterations if convergance did not reach (default: 30)
-            :param metric: The distance metric to use. Valid values are:  
-                "euclidean" (default), "manhattan", "chebyshev", "minkowski", "wminkowski", "seuclidean", "mahalanobis" 
-            :param known_data: A 2D array of indices of known points. When using this parameter, every cluster that  
+            :param metric: The distance metric to use. Valid values are:
+                "euclidean" (default), "manhattan", "chebyshev", "minkowski", "wminkowski", "seuclidean", "mahalanobis"
+            :param known_data: A 2D array of indices of known points. When using this parameter, every cluster that
                 does not contain known labels should be represented as empty list. For example, if we have a dataset and
-                we know some points for classes 1 and 3, we would have  
+                we know some points for classes 1 and 3, we would have
                 ```known_data=[np.array([1,2,3,4]), np.array([]), np.array([19,20,21])]```
             :param alpha: When using semi supervised
                     clustering, we can weigh the known data points differently.
@@ -40,6 +40,7 @@ class KMeans(object):
         self.metric = metric
         self.known_data = known_data
         self.alpha = float(alpha)
+        self.rng = np.random.default_rng(seed=seed)
         self.verbose = verbose
 
     def _validate_metric(self):
@@ -64,7 +65,7 @@ class KMeans(object):
             norm_X = norm_X.reshape(-1, 1)  # [N_X, 1]
             Y = Y if Y is not None else self.centroids
             norm_Y = np.einsum('ij,ji->i', Y, Y.T).reshape(1, -1)  # [1, k]
-            
+
             sim = X @ Y.T / (norm_X * norm_Y)**.5
             sim[(sim>1.)  & (abs(sim-1.)<1e-4)] = 1.
             sim[(sim<-1.) & (abs(sim+1.)<1e-4)] = -1.
@@ -90,8 +91,8 @@ class KMeans(object):
         weights = (1-self.alpha) * np.ones_like(X)
         kd = np.array(reduce(lambda x1, x2: np.hstack([x1, x2]), self.known_data, np.array([])), dtype=np.int64)
         weights[kd] = self.alpha
-        weights = weights / weights.sum()   
-        
+        weights = weights / weights.sum()
+
         for i in range(self.k):
             # compute weights for every cluster
             inds = np.where(self.labels_==i)[0]
@@ -112,7 +113,7 @@ class KMeans(object):
             y = new_centroid.reshape(1, -1)  # [1, n_feat]
             d = self._get_distance(X, y, norm_X=norm_X).reshape(-1) ** .3  # [N]
             d[centroid_args] = 0
-            new_centroid_arg = np.random.choice(X.shape[0], p=d/d.sum())
+            new_centroid_arg = self.rng.choice(X.shape[0], p=d/d.sum())
             centroid_args.append(new_centroid_arg)
             new_centroid = X[new_centroid_arg]
             self.centroids = np.vstack([self.centroids, new_centroid])

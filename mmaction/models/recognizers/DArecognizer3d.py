@@ -2,11 +2,11 @@ import torch
 from torch import nn
 
 from ..builder import RECOGNIZERS
-from .recognizer2d import DARecognizer2d
+from .recognizer2d import DARecognizer2D
 
 
 @RECOGNIZERS.register_module()
-class DARecognizer3D(DARecognizer2d):
+class DARecognizer3D(DARecognizer2D):
     def forward_train(self, imgs, labels, domains, **kwargs):
         """Defines the computation performed at every call when training."""
 
@@ -94,6 +94,6 @@ class DARecognizer3D(DARecognizer2d):
             return feat
 
         # should have cls_head if not extracting features
-        assert self.with_cls_head        
+        assert self.with_cls_head
         cls_score = self.cls_head(feat, domains)
         return self.get_prob(cls_score)

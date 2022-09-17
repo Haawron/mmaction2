@@ -5,7 +5,7 @@ num_classes = 5
 domain_adaptation = True
 
 model = dict(
-    type='DARecognizer2d',
+    type='DARecognizer2D',
     contrastive=True,  # if True, don't shuffle the chosen batch
     backbone=dict(
         type='ResNetTSM',
@@ -31,7 +31,7 @@ model = dict(
         debias=True,
         bias_input=True,
         bias_network=True,
-        debias_last=True, 
+        debias_last=True,
         hsic_factor=.5,
 
         spatial_type='avg',

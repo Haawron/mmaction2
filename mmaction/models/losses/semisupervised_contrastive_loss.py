@@ -1,31 +1,53 @@
-from cv2 import norm
 from ..builder import LOSSES
 from .base import BaseWeightedLoss
 
 import torch
-import torch.nn.functional as F
+from torch.nn.functional import normalize
 import numpy as np
 
 
 @LOSSES.register_module()
 class SemisupervisedContrastiveLoss(BaseWeightedLoss):
 
-    def __init__(self, num_classes, unsupervised=True, loss_ratio=.35, tau=.07):
-        super().__init__()
+    def __init__(self, num_classes, unsupervised=True, loss_ratio=.35, tau=.07, loss_weight=1., video_discrimination=False):
+        super().__init__(loss_weight)
         self.num_classes = num_classes
         self.unsupervised = unsupervised
         self.loss_ratio = loss_ratio
         self.tau = tau
         self.loss = SupConLoss(self.tau, base_temperature=self.tau)
+        self.video_discrimination = video_discrimination
 
     def _forward(self, cls_score, label, domains=None, **kwargs):
-        # cls_score: [4N, 1~3, n_feat]
+        # cls_score: [2B*2(, N), n_feat], normalized in head
+        # label: [2B*2], [ls1, ls1, ls2, ls2, ..., lt1, lt1, lt2, lt2, ...]
+        # domains: [2B]
+        dim = cls_score.dim()
         if self.unsupervised:
-            N = cls_score.shape[0] // 4  # 2x views, source & target
-            loss_super = self.loss(torch.stack([cls_score[:2*N:2], cls_score[1:2*N:2]], dim=1), label[:2*N:2])
-            # loss_selfsuper = self.loss(torch.stack([cls_score[::2], cls_score[1::2]], dim=1))
-            loss_selfsuper = self.loss(torch.stack([cls_score[:2*N:2], cls_score[1:2*N:2]], dim=1))  # source
-            loss_selfsuper += self.loss(torch.stack([cls_score[2*N::2], cls_score[1+2*N::2]], dim=1))  # target
+            mask = None
+            B = cls_score.shape[0] // 4
+            if dim == 3:  # [2B*2, N, n_feat]
+                N = cls_score.shape[1]
+                cls_score = cls_score.reshape(2*B, 2, N, -1)  # [2B, 2, N, n_feat]
+                cls_score = cls_score.transpose(1, 2)  # [2B, N, 2, n_feat]
+                cls_score = cls_score.reshape(2*B*N*2, -1)  # [2B*N*2, n_feat]
+                label = label[:2*B:2].repeat_interleave(N, dim=0)  # [B*N]
+                source_view1, source_view2 = cls_score[:2*B*N:2], cls_score[1:2*B*N:2]  # [B*N, n_feat] each
+                target_view1, target_view2 = cls_score[2*B*N::2], cls_score[2*B*N+1::2]  # [B*N, n_feat] each
+            else:  # [2B*2, n_feat]
+                label = label[:2*B:2]  # [B]
+                source_view1, source_view2 = cls_score[:2*B:2], cls_score[1:2*B:2]
+                target_view1, target_view2 = cls_score[2*B::2], cls_score[2*B+1::2]
+            source_input = torch.stack([source_view1, source_view2], dim=1)  # [B*N, 2, n_feat]
+            target_input = torch.stack([target_view1, target_view2], dim=1)  # [B*N, 2, n_feat]
+            if self.video_discrimination:
+                assert dim == 3
+                label = label[::N]  # [B]
+                source_input = source_input.reshape(B, 2*N, -1)  # [B, N*2, n_feat]
+                target_input = target_input.reshape(B, 2*N, -1)  # [B, N*2, n_feat]
+            loss_super = self.loss(source_input, label)
+            loss_selfsuper = self.loss(source_input)
+            loss_selfsuper += self.loss(target_input)
             return {'loss_super': self.loss_ratio * loss_super, 'loss_selfsuper': (1 - self.loss_ratio) * loss_selfsuper}
         else:
             # labels for target domains are pseudo-labels
