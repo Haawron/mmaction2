@@ -31,6 +31,7 @@ METRICS2DISPLAY = {
     'top5_acc': 'top5',
     'mean_class_accuracy': 'mca',
     'H_mean_class_accuracy': 'h', 'os*': 'os*',
+    'sskmeans': 'h (sskmeans)',
     'recall_unknown': 'unk',
 }
 METRICS = METRICS2DISPLAY.values()
@@ -62,7 +63,7 @@ def main():
                         help='')
     parser.add_argument('-ig', '--ignore-old-models', action='store_true',
                         help='ignore models with $jid < 19000')
-    parser.add_argument('-smb', '--select-model-by', choices=METRICS, default='h',
+    parser.add_argument('-smb', '--select-model-by', choices=METRICS, default='h (sskmeans)',
                         help='')
 
     parser.add_argument('-j', '--jids', default=None, nargs='+',
@@ -188,7 +189,7 @@ def print_df_from_config_vars(
     sort_ek100_task_by_target = lambda column: column.map(lambda value: ''.join(value.split('_')[::-1])) if column.name == 'task' else column
     sort_key_func = sort_ek100_task_by_target if dataset == 'ek100' else None
 
-    with pd.option_context('display.max_colwidth', None):  # more options can be specified also
+    with pd.option_context('display.max_colwidth', None, 'display.precision', 4):  # more options can be specified also
         print(
             df
             .reset_index()
@@ -346,8 +347,10 @@ def get_test_scores_from_logfile(p_log, for_cop=False):
         matched = re.split(r'Testing results of the best checkpoint\s', data)
         if len(matched) == 1:
             return None
-        matched = re.findall(r'([\w\*]+): (\d.\d+)', matched[-1])
-        test_scores = {METRICS2DISPLAY[name]: float(score) for name, score in matched}
+        matched_scores = re.findall(r'([\w\*]+): (\d.\d+)', matched[-1])  # 0 <= score <= 1
+        test_scores = {METRICS2DISPLAY[name]: float(score) for name, score in matched_scores}
+        matched_scores = re.findall(r'([\w\*]+): (\d\d.\d+)', matched[-1])  # 0 <= score(percent) <= 100
+        test_scores.update({METRICS2DISPLAY[name]: float(score)/100 for name, score in matched_scores})
     return test_scores
 
 

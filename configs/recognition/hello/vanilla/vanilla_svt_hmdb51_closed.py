@@ -17,10 +17,14 @@ model = dict(
         transformer_layers=None,
         attention_type='divided_space_time',
         norm_cfg=dict(type='LN', eps=1e-6)),
-    cls_head=dict(type='TimeSformerHead', num_classes=12, in_channels=768),
+    cls_head=dict(
+        type='DINOHead',
+        in_channels=768,
+        num_classes=12,
+        print_mca=False),
     # model training and testing settings
     train_cfg=None,
-    test_cfg=dict(average_clips='prob'))
+    test_cfg=dict(average_clips='prob'))  # None: prob - prob, score - -distance, None - feature
 
 # dataset settings
 data_prefix = '/local_datasets/hmdb51/rawframes'

@@ -19,12 +19,12 @@ class SemisupervisedContrastiveLoss(BaseWeightedLoss):
         self.video_discrimination = video_discrimination
 
     def _forward(self, cls_score, label, domains=None, **kwargs):
-        # cls_score: [2B*2(, N), n_feat], normalized in head
+        # cls_score: [2B*2(, N), n_feat]
         # label: [2B*2], [ls1, ls1, ls2, ls2, ..., lt1, lt1, lt2, lt2, ...]
         # domains: [2B]
+        cls_score = normalize(cls_score, dim=-1)
         dim = cls_score.dim()
         if self.unsupervised:
-            mask = None
             B = cls_score.shape[0] // 4
             if dim == 3:  # [2B*2, N, n_feat]
                 N = cls_score.shape[1]

@@ -22,7 +22,7 @@ def main():
     parser.add_argument('-n', '--num-classes', type=int, default=12,
                         help='without unk')
 
-    parser.add_argument('-j', '--jobid', type=int, default=None,
+    parser.add_argument('-j', '--jobid', type=str, default=None,
                         help='')
 
     parser.add_argument('-pf', '--p-feature-root', type=Path, default=Path('work_dirs/hello/ucf101/vanilla'),
@@ -163,13 +163,13 @@ def train_osvms(
 
 def train_pi_svm(sss, osvms, data_train, quiet=False):
     if not quiet:
-        print('training p_i-SVM (OSVMs) ...', end=' ')
+        print('training p_i-SVM (OSVMs) ...')
     # print()
     params = []
     threshold = 0  # over this, detected
     for c, (ss, osvm) in enumerate(zip(sss, osvms)):
-        data_train = ss.transform(data_train)
-        scores = get_pred_score_from_osvm(osvm, data_train)
+        data_train_ss = ss.transform(data_train)
+        scores = get_pred_score_from_osvm(osvm, data_train_ss)
         n_positive_support_vectors = (scores[osvm.support_] > threshold).sum()
         if not quiet:
             with np.printoptions(suppress=True, precision=5, linewidth=1000):
@@ -208,10 +208,14 @@ def test_pi_svm(
     pred_test = p.argmax(axis=1)
 
     curr_metric_score = 0
+    metric_scores = None
+    best_pred = pred_test
     for delta in np.logspace(-3, .2, 200, endpoint=True):
         pred_test_tmp = pred_test.copy()
         pred_test_tmp[p.max(axis=1) < delta] = num_classes  # reject
         os_star, unk, H, mca, conf = get_metric_scores(num_classes, pred_test_tmp, label_test)
+        if metric_scores is None:
+            metric_scores = os_star, unk, H, mca, conf
         criterion = H
         if criterion > curr_metric_score:
             curr_metric_score = criterion
@@ -245,12 +249,15 @@ def build_osvm_for_class_c(c, data_train, label_train, data_valid, label_valid, 
     best_osvm = None
     best_valid_score = 0
     j_C, j_gamma = 0, 0
-    # for i_gamma, gamma in enumerate(np.logspace(-2, 1., 20//2, endpoint=False)[-3:]):
-    #     for i_C, C in enumerate(np.logspace(-1., 1., 30//3, endpoint=True)[-2:-1]):
+
+    # gamma, C = 1e-3, .1  # 4370_2, SVT, u2h, vanilla
+    # gamma, C = 1e-3, .1  # 4372_1, SVT, u2h, vanilla
+    # for i_gamma, gamma in enumerate(np.logspace(-3, 1., 20//2, endpoint=False)):
+    #     for i_C, C in enumerate(np.logspace(-1., 1., 30//3, endpoint=True)):
     # for i_gamma, gamma in enumerate(np.arange(1, 6) / 10):
     #     for i_C, C in enumerate(np.arange(1, 6) / 10):
-    for i_gamma, gamma in enumerate([.4]):
-        for i_C, C in enumerate([.4]):
+    for i_gamma, gamma in enumerate([1e-3]):
+        for i_C, C in enumerate([.1]):
             osvm = svm.SVC(gamma=gamma, kernel='rbf', C=C)
             osvm.fit(data_train, bin_label_train)
             pred = osvm.predict(data_valid)
@@ -261,6 +268,7 @@ def build_osvm_for_class_c(c, data_train, label_train, data_valid, label_valid, 
                 j_C = i_C
                 j_gamma = i_gamma
     params = best_osvm.get_params()
+    # print(f'c: {c:2d}, C [{j_C+1:2d}/{i_C+1}]: {params["C"]:.7f}, valid_score: {best_valid_score:.4f}')
     print(f'c: {c:2d}, gamma [{j_gamma+1:2d}/{i_gamma+1}]: {params["gamma"]:.7f}, C [{j_C+1:2d}/{i_C+1}]: {params["C"]:.7f}, valid_score: {best_valid_score:.4f}')
     return best_osvm, ss, best_valid_score
 

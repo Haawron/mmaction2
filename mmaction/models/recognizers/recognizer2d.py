@@ -228,7 +228,7 @@ class DARecognizer2D(Recognizer2D):
                 N, T = imgs.shape[1], imgs.shape[3]
                 imgs = imgs.transpose(2, 3)
             imgs = imgs.reshape((-1, ) + imgs.shape[-3:])
-        self.B, self.N, self.T = B, N, T
+        self.B, self.N, self.T = B, N, T  # static values throughout the training
         gt_labels = labels.squeeze()  # [2B] or [2B*2]
         return imgs, gt_labels, domains
 
@@ -252,7 +252,7 @@ class DARecognizer2D(Recognizer2D):
             x, loss_aux = self.neck(x, None, domains, gt_labels)
             losses.update(loss_aux)
 
-        cls_score = self.cls_head(x, None, domains)  # [2B( * 2) * N, 1~3, C]
+        cls_score = self.cls_head(x, None, domains)  # [2B(*2)(*N)(*T), 1~3, C, 7, 7]
         if self.N is not None:
             cls_score = cls_score.reshape(-1, self.N, *cls_score.shape[-2:])
 
@@ -315,7 +315,10 @@ class DARecognizer2D(Recognizer2D):
 
         # [B, N, C, T, H, W] or [B, T, C, H, W]
         if imgs.dim() == 6:
+            B, N, C, T, H, W = imgs.shape
             imgs = imgs.transpose(2, 3)  # [B, N, T, C, H, W]
+        elif imgs.dim() == 5:
+            B, T, C, H, W = imgs.shape
         imgs = imgs.reshape(-1, *imgs.shape[-3:])
 
         # X = BNT or BT
@@ -334,14 +337,8 @@ class DARecognizer2D(Recognizer2D):
         if self.feature_extraction:
             x = nn.AdaptiveAvgPool2d(1)(x)  # [X, C_feat, 1, 1]
             x = torch.flatten(x, start_dim=1)  # [X, C_feat]
-            x = x.reshape(-1, self.T, x.shape[-1])  # [*, T, C_feat]
+            x = x.reshape(-1, T, x.shape[-1])  # [*, T, C_feat]
             x = x.mean(axis=1)  # [*, C_feat]
-            x = x.reshape(
-                (2, self.B)
-                + (2,) if self.contrastive else ()
-                + (self.N) if self.N is not None else ()
-                + (x.shape[-1],)
-            )
             return x
 
         cls_score = self.cls_head(x, None, domains)
@@ -375,15 +372,6 @@ class DARecognizer2D(Recognizer2D):
             return cls_score
         else:
             if self.contrastive:  # {GCD}
-                # cls_score = cls_score.unsqueeze(dim=1)  # [N, 1, n_feat]
-                # if not self.cls_head.with_given_centroids:
-                #     centroids = torch.stack([c.mean for c in self.cls_head.centroids])
-                # else:
-                #     centroids = self.cls_head.centroids
-                # centroids = centroids.unsqueeze(dim=0)  # [1, k, n_feat]
-                # distances = (cls_score - centroids) ** 2  # [N, K, n_feat]
-                # distances = distances.sum(dim=2) ** .5  # [N, K]
-                # cls_score = -distances  # [N, K]
                 cls_score = self.cls_head._get_logits_from_features(cls_score)
 
             if average_clips == 'score':

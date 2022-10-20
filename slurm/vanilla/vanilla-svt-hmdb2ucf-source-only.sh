@@ -5,13 +5,14 @@
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-gpu=4
 #SBATCH --mem-per-gpu=15G
-#SBATCH -t 4-0
+#SBATCH -t 8:00:00
+#SBATCH -x agi1
 #SBATCH --array 0-5%2
 #SBATCH -o slurm/logs/slurm-%A_%a-%x.out
 
 current_time=$(date +'%Y%m%d-%H%M%S')
 
-lrs=(4e-2 8e-3 4e-3 8e-4 4e-4 4e-5)
+lrs=(.3 .1 8e-2 5e-2 1e-2 5e-3)
 lr="${lrs[SLURM_ARRAY_TASK_ID]}"
 
 N=$SLURM_GPUS_ON_NODE
@@ -24,7 +25,7 @@ OMP_NUM_THREADS=${N} MKL_NUM_THREADS=${N} torchrun --nproc_per_node=${N} --maste
     --work-dir $workdir \
     --cfg-options \
         optimizer.lr=$lr \
-    --validate \
-    --test-last --test-best
+    --validate --test-last --test-best
 
-exit
+echo 'done'
+exit 0

@@ -1,6 +1,7 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import numpy as np
 
+from .base import BaseDataset
 from .builder import DATASETS, build_dataset
 
 
@@ -59,6 +60,14 @@ class ConcatDataset:
         self.datasets = datasets
         self.lens = [len(x) for x in self.datasets]
         self.cumsum = np.cumsum(self.lens)
+        # for evaluation
+        self.video_infos = sum([dataset.video_infos for dataset in self.datasets], [])
+        self.num_classes = self.datasets[0].num_classes
+        # for test, staticmethod
+        self.dump_results = BaseDataset.dump_results
+
+    def evaluate(self, *args, **kwargs):
+        return type(self.datasets[0]).evaluate(self, *args, **kwargs)
 
     def __getitem__(self, idx):
         """Get data."""

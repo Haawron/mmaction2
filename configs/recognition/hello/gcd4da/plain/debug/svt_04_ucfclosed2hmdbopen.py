@@ -17,13 +17,13 @@ model = dict(
         in_channels=3,
         dropout_ratio=0.,
         transformer_layers=None,
-        frozen_stages=10,
+        frozen_stages=11,
         norm_eval=False,
         attention_type='divided_space_time',
         norm_cfg=dict(type='LN', eps=1e-6)),
     cls_head=dict(
-        type='DINOHead',
-        in_dim=768,
+        type='DINODAHead',
+        in_channels=768,
         out_dim=65536,
         loss_cls=dict(
             type='SemisupervisedContrastiveLoss',
@@ -36,11 +36,11 @@ model = dict(
 
 # dataset settings
 data_prefix_source = '/local_datasets/ucf101/rawframes'
-data_prefix_target = '/local_datasets/ucf101/rawframes'
+data_prefix_target = '/local_datasets/hmdb51/rawframes'
 ann_file_train_source = 'data/_filelists/ucf101/filelist_ucf_train_closed.txt'
-ann_file_train_target = 'data/_filelists/ucf101/filelist_ucf_train_closed.txt'
-ann_file_valid_target = 'data/_filelists/ucf101/filelist_ucf_val_closed.txt'
-ann_file_test_target = 'data/_filelists/ucf101/filelist_ucf_test_closed.txt'
+ann_file_train_target = 'data/_filelists/hmdb51/filelist_hmdb_train_open.txt'
+ann_file_valid_target = 'data/_filelists/hmdb51/filelist_hmdb_val_closed.txt'
+ann_file_test_target = 'data/_filelists/hmdb51/filelist_hmdb_test_closed.txt'
 
 img_norm_cfg = dict(
     mean=[127.5, 127.5, 127.5], std=[127.5, 127.5, 127.5], to_bgr=False)
@@ -150,7 +150,7 @@ lr_config = dict(policy='CosineAnnealing', min_lr=lr*1e-3)
 total_epochs = 200
 
 # runtime settings
-checkpoint_config = dict(interval=5)
+checkpoint_config = dict(interval=10)
 
 log_config = dict(
     interval=20,  # every [ ] steps

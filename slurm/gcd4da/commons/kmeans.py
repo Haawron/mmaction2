@@ -1,7 +1,6 @@
 import pickle
 from pathlib import Path
 from collections import defaultdict
-from semi_kmeans import KMeans as SemiKMeans
 import numpy as np
 import pandas as pd
 import csv
@@ -9,6 +8,10 @@ import argparse
 import re
 import os
 from multiprocessing import Pool
+if __name__ == '__main__':
+    from slurm.gcd4da.commons.semi_kmeans import KMeans as SemiKMeans
+else:
+    from .semi_kmeans import KMeans as SemiKMeans
 from slurm.utils.commons.patterns import get_full_infodict_from_jid
 
 
@@ -23,21 +26,31 @@ CDAR_METRICS = [METRIC_ALL, METRIC_OLD, METRIC_NEW]
 def main():
     parser = argparse.ArgumentParser(description='')
     parser.add_argument(
-        '-j', '--jid', default=None,
-        help=''
-    )
+        '-j', '--jid', default=None, type=str,
+        help='')
+    parser.add_argument(
+        '-f', '--p-features', default=None, type=Path,
+        help='')
+
     parser.add_argument(
         '-c', '--create-filelist', action='store_true',
         help='')
     parser.add_argument(
         '-n', '--n-tries', type=int, default=5,
         help='')
+    parser.add_argument(
+        '-k', '--fixed-k', type=int, default=None,
+        help='')
     args = parser.parse_args()
 
     np.random.seed(999)  # numpy & sklearn
 
-    # p_root = args.root_dir
-    p_root = Path(get_full_infodict_from_jid(args.jid)['config']).parent
+    assert (args.jid is not None) ^ (args.p_features is not None)  # exactly one
+
+    if args.jid:
+        p_root = Path(get_full_infodict_from_jid(args.jid)['config']).parent
+    elif args.p_features:
+        p_root = args.p_features.parent
     source, target = re.findall(r'/([\w^_]{1,4})[2_-]([\w^_]{1,4})/', str(p_root))[0] or [('P02', 'P04')]
     print(f'Task: {source} -> {target}')
     num_classes = (
@@ -45,17 +58,18 @@ def main():
         12 if source in ['ucf', 'hmdb'] else
         None
     )
-    Xs, anns, p_anns = get_input_and_output(p_root, source, target, num_classes)
+
+    p_features = args.p_features if args.p_features else p_root / 'features'
+    Xs, anns, p_anns = get_input_and_output(p_features, source, target, num_classes)
     for key in Xs.keys():
         print(f'{key:12s}\t{anns[key].shape} {Xs[key].shape}')
 
-    print(f'\nTraining k-means models n_tries={args.n_tries} ...', end=' ')
-    # global_best_model, ks, rows_H, rows_os, rows_os_star, rows_unk = train_wrapper(Xs, anns, num_classes, n_tries)
-    global_best_model, ks, rows = train_wrapper(Xs, anns, num_classes, args.n_tries)
+    print(f'\nTraining k-means models n_tries={args.n_tries} ...')
+    global_best_model, ks, score_rows = train_wrapper(Xs, anns, num_known_classes=num_classes, fixed_k=args.fixed_k, n_tries=args.n_tries)
     print('done\n')
 
     mi_columns = pd.MultiIndex.from_product([SPLIT_NAMES, VOSUDA_METRICS], names=['split', 'mode'])
-    df = pd.DataFrame.from_dict({k: row for k, row in zip(ks, rows)}, columns=mi_columns, orient='index')
+    df = pd.DataFrame.from_dict({k: row for k, row in zip(ks, score_rows)}, columns=mi_columns, orient='index')
     with pd.option_context('display.precision', 1):
         print(df)
 
@@ -88,15 +102,15 @@ def create_filelist(model, X_train_target, p_ann_train_target, p_out):
         writer = csv.writer(f_out, delimiter=' ')
         for line, pseudo_label in zip(reader, pseudo_labels):
             writer.writerow(line[:-1] + [pseudo_label])
-    print(f'Created a filelist in {p_out}.\n')
+    print(f'Created a filelist in "{p_out}".\n')
 
 def create_centroids(model, p_out):
     with p_out.open('wb') as f_cent:
         pickle.dump(model.centroids, f_cent)
-    print(f'Created a centroid file in {p_out}.\n')
+    print(f'Created a centroid file in "{p_out}".\n')
 
 
-def get_input_and_output(p_root, source, target, num_classes=5):
+def get_input_and_output(p_feature, source, target, num_classes=5):
     anns = {}
     domain2dataset = {
         'ucf': 'ucf101',
@@ -122,10 +136,10 @@ def get_input_and_output(p_root, source, target, num_classes=5):
     Xs = {}
     for split_name, p_feature in zip(
         SPLIT_NAMES, [
-            p_root / f'features/{source}_train_open.pkl',
-            p_root / f'features/{target}_train_open.pkl',
-            p_root / f'features/{target}_val_open.pkl',
-            p_root / f'features/{target}_test_open.pkl',
+            p_feature / f'{source}_train_open.pkl',
+            p_feature / f'{target}_train_open.pkl',
+            p_feature / f'{target}_val_open.pkl',
+            p_feature / f'{target}_test_open.pkl',
         ]
     ):
         try:
@@ -143,9 +157,14 @@ def get_input_and_output(p_root, source, target, num_classes=5):
     return Xs, anns, p_anns
 
 
-def train_wrapper(Xs, anns, num_classes=5, n_tries=20):
-    ks = set(range(num_classes, num_classes+20)) | {30, 50, 100}
-    ks = sorted(ks)
+def train_wrapper(Xs, anns, num_known_classes=5, fixed_k:int=None, n_tries=20, verbose=True):
+    print([np.linalg.norm(X) for X in Xs.values()])
+    if fixed_k is None:
+        ks = set(range(num_known_classes, num_known_classes+20)) | {30, 50, 100}
+        ks = sorted(ks)
+    else:
+        assert fixed_k >= num_known_classes
+        ks = [fixed_k]
     jobs = []
     for k in ks:
         for n in range(n_tries):
@@ -153,11 +172,11 @@ def train_wrapper(Xs, anns, num_classes=5, n_tries=20):
                 'k': k,
                 'Xs': Xs,
                 'anns': anns,
-                'num_classes': num_classes,
+                'num_classes': num_known_classes,
                 'seed': 5236 * n,
             })
     # results = {
-    #     12: {
+    #     12: {  # k
     #         'scores_H': [
     #             [88.7, 88.3, 75.4, 77.8],  # train_source, train_target, valid, test
     #             [88.7, 88.3, 75.4, 77.8],
@@ -175,33 +194,29 @@ def train_wrapper(Xs, anns, num_classes=5, n_tries=20):
     #             ...
     #         ],
     #     },
+    #     13: {
+    #       ...
+    #     },
     #     ...
     # }
     # dict of dicts of lists of dicts
     results = defaultdict(lambda: defaultdict(list))
     global_best_test_score = 0
+    global_best_test_scores = []
     global_best_k = None
     with Pool(int(os.environ.get('SLURM_CPUS_ON_NODE', 8))) as p:
         for model, k, scores in p.imap_unordered(worker, jobs):
             if global_best_test_score < scores[0]['test']:  # scores[0]: head metric
                 global_best_test_score = scores[0]['test']
+                global_best_test_scores = [f'{score["test"]:.1f}' for score in scores]
                 global_best_model = model
                 global_best_k = k
             for metric, score in zip(VOSUDA_METRICS, scores):
                 results[k][metric].append(list(score.values()))
-        # for model, k, scores_H, scores_os, scores_os_star, scores_unk in p.imap_unordered(worker, jobs):
-        #     if global_best_test_score < scores_H['test']:
-        #         global_best_test_score = scores_H['test']
-        #         global_best_model = model
-        #         global_best_k = k
-        #     results[k]['scores_H'].append(list(scores_H.values()))
-        #     results[k]['scores_os'].append(list(scores_os.values()))
-        #     results[k]['scores_os_star'].append(list(scores_os_star.values()))
-        #     results[k]['scores_unk'].append(list(scores_unk.values()))
     p.join()
 
-    # rows_H = [
-    #     [33.7, 33.7, 33.7, 33.7],  # train_source, train_target, valid, test
+    # rows = [
+    #     [33.7, 33.7, 33.7, 33.7, ..., 33.7, 33.7, 33.7, 33.7],  # [train_source, train_target, valid, test] x [H, OS, OS*, UNK]
     #     ...  # for all k's
     # ]
     rows = []
@@ -209,11 +224,7 @@ def train_wrapper(Xs, anns, num_classes=5, n_tries=20):
         means = np.concatenate([
             np.mean(results[k][metric], axis=0, keepdims=True)
             for metric in VOSUDA_METRICS
-            # np.mean(results[k]['scores_H'], axis=0, keepdims=True),
-            # np.mean(results[k]['scores_os'], axis=0, keepdims=True),
-            # np.mean(results[k]['scores_os_star'], axis=0, keepdims=True),
-            # np.mean(results[k]['scores_unk'], axis=0, keepdims=True),
-        ], axis=0).T.reshape(-1).tolist()
+        ], axis=0).T.reshape(-1).tolist()  # [16]
         # stddevs = np.concatenate([
         #     np.std(results[k]['scores_H'], axis=0, keepdims=True),
         #     np.std(results[k]['scores_os'], axis=0, keepdims=True),
@@ -222,7 +233,11 @@ def train_wrapper(Xs, anns, num_classes=5, n_tries=20):
         # ], axis=0).T.reshape(-1)  # 5 ~ 7 정도 남
         rows.append(means)
     # TODO: global best model은 뭘 보고 뽑음? best k -> best model?
-    print(f'\nbest test score {global_best_test_score:.1f} at k={global_best_k}')
+    if verbose:
+        print(f'\nbest test score {global_best_test_score:.1f} at k={global_best_k}')
+        print('\t', ' '.join(global_best_test_scores))
+        global_best_mean_test_score, global_best_mean_test_k = max(zip([means[-4] for means in rows], ks), key=lambda zipped_row: zipped_row[0])
+        print(f'best (mean) test score {global_best_mean_test_score:.1f} at k={global_best_mean_test_k}')
     return global_best_model, ks, rows
 
 
@@ -233,11 +248,6 @@ def worker(job:dict):
 def train(k, Xs, anns, num_classes, seed):
     model = get_semi_kmeans_model(k, Xs, anns, num_classes, seed)
     scores = [get_model_score(model, Xs, anns, num_classes, metric, False) for metric in VOSUDA_METRICS]
-    # scores_H = get_model_score(model, Xs, anns, num_classes, 'H', False)
-    # scores_os = get_model_score(model, Xs, anns, num_classes, 'os', False)  # score dict for each split
-    # scores_os_star = get_model_score(model, Xs, anns, num_classes, 'os*', False)
-    # scores_unk = get_model_score(model, Xs, anns, num_classes, 'unk', False)
-    # return model, k, scores_H, scores_os, scores_os_star, scores_unk
     return model, k, scores
 
 
@@ -249,7 +259,7 @@ def cosine(X, y, norm_X=None):
     return sim
 
 
-def get_semi_kmeans_model(k, Xs, anns, num_classes=5, seed=1234):
+def get_semi_kmeans_model(k, Xs, anns, num_classes=5, seed=999):
     known_data = [
         np.where(anns['train_source'] == i)[0].astype(np.int64)
         for i in range(num_classes)
@@ -294,15 +304,25 @@ def _get_model_score_(confmat, mode=METRIC_H):
     pass
 
 def get_model_score(model, Xs, anns, num_classes=5, mode=METRIC_H, verbose=True):
-    assert mode in VOSUDA_METRICS
+    assert mode in VOSUDA_METRICS + CDAR_METRICS
     scores = {}
     for split_name in SPLIT_NAMES:
+        if Xs[split_name] is None or anns[split_name] is None:
+            continue
         if verbose:
             print(split_name.split('_')[0])
 
         pred_test = model.predict(Xs[split_name])
         pred_test = np.minimum(num_classes, pred_test, dtype=np.int64)
         conf = confusion_matrix(pred_test, anns[split_name])
+
+        if mode in VOSUDA_METRICS:
+            if conf.shape[0] > num_classes:
+                conf[num_classes] = conf[num_classes:].sum(axis=0)
+                conf = conf[:num_classes+1]
+            if conf.shape[1] > num_classes:
+                conf[:,num_classes] = conf[:,num_classes:].sum(axis=1)
+                conf = conf[:,:num_classes+1]
 
         if split_name == 'train_source':
             conf = conf[:num_classes]  # [num_classes, num_classes+1]

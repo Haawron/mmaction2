@@ -291,7 +291,7 @@ def main():
             dict(out=args.out), output_config)
 
     # Load eval_config from cfg
-    eval_config = cfg.get('eval_config', {})
+    eval_config = cfg.get('eval_config', {}) or cfg.get('evaluation', {})
     if args.eval:
         # Overwrite eval_config from args.eval
         eval_config = Config._merge_a_into_b(
@@ -364,7 +364,7 @@ def main():
             out = output_config['out']
             print(f'\nwriting results to {out}')
             dataset.dump_results(outputs, **output_config)
-        if eval_config:
+        if args.eval:
             eval_res = dataset.evaluate(outputs, **eval_config)
             if args.save_eval:
                 with Path(args.out).with_suffix('.csv').open('w') as f:

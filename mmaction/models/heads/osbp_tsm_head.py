@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 from mmcv.cnn import normal_init
 from torch.autograd import Function
-import numpy as np
 
 from ..builder import HEADS
 from ...core import top_k_accuracy
@@ -29,7 +28,7 @@ class OSBPTSMHead(BaseHead):
             in_channels,
             num_layers=1,
             num_segments=8,
-            loss_cls=dict(type='CrossEntropyLoss'),
+            loss_cls=dict(type='OSBPLoss'),
             spatial_type='avg',
             consensus=dict(type='AvgConsensus', dim=1),
             dropout_ratio=0.8,
@@ -134,8 +133,6 @@ class OSBPTSMHead(BaseHead):
             labels = labels.unsqueeze(0)
 
         if not self.multi_class and cls_score.size() != labels.size():
-            # with np.printoptions(suppress=True, linewidth=np.inf, precision=2):
-            #     print(np.concatenate([cls_score[domains=='source'].detach().cpu().numpy(), labels[domains=='source'].unsqueeze(1).detach().cpu().numpy()], axis=1))
             top_k_acc = top_k_accuracy(cls_score.detach().cpu().numpy(),
                                        labels.detach().cpu().numpy(),
                                        self.topk)

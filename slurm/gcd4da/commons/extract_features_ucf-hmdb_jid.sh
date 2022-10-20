@@ -6,8 +6,12 @@ set -e
 jid=${1:-'4770_4'}
 echo $jid
 
-read model source target config ckpt <<< $(python slurm/utils/commons/patterns.py 'model' 'source' 'target' 'config' 'ckpt' -j $jid)
-
+read model backbone source target config ckpt <<< $(python slurm/utils/commons/patterns.py 'model' 'backbone' 'source' 'target' 'config' 'ckpt' -j $jid)
+if [[ "$backbone" == 'svt' ]]; then
+    config=configs/recognition/hello/gcd4da/plain/debug/svt_04_ucfclosed2hmdbopen.py
+elif [[ "$backbone" == 'tsm' ]]; then
+    config=configs/recognition/hello/gcd4da/plain/debug/tsm_04_ucfclosed2hmdbopen.py
+fi
 
 echo "$source -> $target"
 echo
@@ -28,7 +32,7 @@ for i in {0..3}; do
 
     outfile=${ckpt%/*}/features/${domains[i]}_${splits[i]}_open.pkl
     annfile=data/_filelists/${dataset}/filelist_${domains[i]}_${split}_open.txt
-    outtype=$([ "$model" == 'gcd4da' -o "$model" == 'cdar' ] && echo "feature" || echo "score")
+    # outtype=$([ "$model" == 'gcd4da' -o "$model" == 'cdar' ] && echo "feature" || echo "score")
 
     if [[ ! -f $annfile ]]; then
         echo "$annfile does not exist"
@@ -37,7 +41,7 @@ for i in {0..3}; do
 
     echo "Outfile:" $outfile
     echo "Annfile:" $annfile
-    echo "OutType:" $outtype
+    # echo "OutType:" $outtype
     echo
 
     OMP_NUM_THREADS=${N} MKL_NUM_THREADS=${N} torchrun --nproc_per_node=${N} --master_port=$((10000+$RANDOM%20000)) tools/test.py $config --launcher pytorch \
@@ -46,8 +50,9 @@ for i in {0..3}; do
         --cfg-options \
             data.test.ann_file=$annfile \
             data.test.data_prefix=/local_datasets/${dataset}/rawframes \
-            data.videos_per_gpu=8 \
-            model.test_cfg.average_clips=$outtype
+            data.videos_per_gpu=20 \
+            model.test_cfg.feature_extraction=True
+            # model.test_cfg.average_clips=$outtype
 
     echo -e "\n=====================================================\n\n"
 done

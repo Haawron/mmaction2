@@ -1,4 +1,4 @@
-from configs.recognition.hello.osbp.__base__.osbp_tsm_ucfhmdb import data, evaluation, work_dir
+from configs.recognition.hello.osbp._base_.osbp_tsm_ucfhmdb import data, evaluation, work_dir
 _base_ = ['./__base__/osbp_tsm_ucfhmdb.py']
 
 

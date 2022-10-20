@@ -1,13 +1,14 @@
 #!/bin/bash
 
-#SBATCH -J debug-phase0-svt_ucf2hmdb-plain
+#SBATCH -J debug-phase0-svt-ucf2hmdb-plain
 #SBATCH --gres=gpu:4
 #SBATCH -t 4-0
 #SBATCH -p batch
 #SBATCH --array 0-3%2
 #SBATCH --cpus-per-gpu=4
-#SBATCH --mem-per-gpu=10G
+#SBATCH --mem-per-gpu=20G
 #SBATCH -o slurm/logs/slurm-%A_%a-%x.out
+#SBATCH -x agi1
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=gunsbrother@khu.ac.kr
 
@@ -22,10 +23,10 @@ N=$SLURM_GPUS_ON_NODE
 workdir=work_dirs/train_output/ucf2hmdb/svt/gcd4da/debug__plain/phase0/default/${SLURM_ARRAY_JOB_ID}__${SLURM_JOB_NAME}/${SLURM_ARRAY_TASK_ID}/${current_time}
 
 configs=(
-    configs/recognition/hello/gcd4da/plain/debug/01_svt_ucfclosed2ucfclosed.py
-    configs/recognition/hello/gcd4da/plain/debug/02_svt_ucfclosed2ucfopen.py
-    configs/recognition/hello/gcd4da/plain/debug/03_svt_ucfclosed2hmdbclosed.py
-    configs/recognition/hello/gcd4da/plain/debug/04_svt_ucfclosed2hmdbopen.py
+    configs/recognition/hello/gcd4da/plain/debug/svt_01_ucfclosed2ucfclosed.py
+    configs/recognition/hello/gcd4da/plain/debug/svt_02_ucfclosed2ucfopen.py
+    configs/recognition/hello/gcd4da/plain/debug/svt_03_ucfclosed2hmdbclosed.py
+    configs/recognition/hello/gcd4da/plain/debug/svt_04_ucfclosed2hmdbopen.py
 )
 
 config="${configs[SLURM_ARRAY_TASK_ID]}"

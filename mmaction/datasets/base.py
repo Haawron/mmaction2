@@ -16,6 +16,8 @@ import pickle
 from mmcv.utils import print_log
 from torch.utils.data import Dataset
 
+from slurm.gcd4da.commons.kmeans import train_wrapper as train_sskmeans
+
 from ..core import (mean_average_precision, mean_class_accuracy,
                     mmit_mean_average_precision, top_k_accuracy,
                     confusion_matrix)
@@ -175,8 +177,8 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
                 'Option arguments for metrics has been changed to '
                 "`metric_options`, See 'https://github.com/open-mmlab/mmaction2/pull/286' "  # noqa: E501
                 'for more details')
-            metric_options['top_k_accuracy'] = dict(
-                metric_options['top_k_accuracy'], **deprecated_kwargs)
+            # metric_options['top_k_accuracy'] = dict(
+            #     metric_options['top_k_accuracy'], **deprecated_kwargs)
 
         if not isinstance(results, list):
             raise TypeError(f'results must be a list, but got {type(results)}')
@@ -187,7 +189,7 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
         metrics = metrics if isinstance(metrics, (list, tuple)) else [metrics]
         allowed_metrics = [
             'top_k_accuracy', 'mean_class_accuracy', 'H_mean_class_accuracy', 'mean_average_precision',
-            'mmit_mean_average_precision', 'recall_unknown', 'confusion_matrix', 'sskmeans', 'logits'
+            'mmit_mean_average_precision', 'recall_unknown', 'confusion_matrix', 'kmeans', 'sskmeans', 'logits'
         ]
 
         for metric in metrics:
@@ -201,9 +203,10 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
             gt_labels = [ann['label'] for ann in self.video_infos]
 
         results = np.array(results)
-        if self.num_classes:
-            if results.shape[1] > self.num_classes:
-                results = np.hstack([results[:,:self.num_classes-1], results[:,self.num_classes-1:].max(axis=1, keepdims=True)])
+        # 이거 왜 있지?
+        # if self.num_classes:
+        #     if results.shape[1] > self.num_classes:
+        #         results = np.hstack([results[:,:self.num_classes-1], results[:,self.num_classes-1:].max(axis=1, keepdims=True)])
 
         for metric in metrics:
             msg = f'Evaluating {metric} ...'
@@ -293,26 +296,43 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
                 print_log(log_msg, logger=logger)
                 continue
 
+            if metric == 'kmeans':
+                pass
+
             if metric == 'sskmeans':
-                raise NotImplementedError()
-                # val pipeline을 두 개로 만들거나 합친 filelist를 만들어서 자르는 지점을 알려줘야 함
-                Xs = None
-                anns = {
-                    'train_source': None,
-                    'train_target': None,
-                    'valid': None,
-                    'test': None,
+                # to resolve circular import
+                from mmaction.datasets.dataset_wrappers import ConcatDataset
+                assert type(self) == ConcatDataset
+                gt_labels = np.array(gt_labels)
+                Xs = {
+                    'train_source': results[:self.cumsum[0]],
+                    'train_target': results[self.cumsum[0]:self.cumsum[1]],
+                    'valid': results[self.cumsum[1]:self.cumsum[2]],
+                    'test': results[self.cumsum[2]:],
                 }
-                best_H, best_k = 0, None
-                n_tries = metric_options.setdefault('k-means', {}).setdefault('n_tries', 1)  # default = {'k-means': {'n_tries': 1}}
-                for k in [*range(self.num_classes, self.num_classes+30), 50, 100]:
-                    for _ in range(n_tries):
-                        model, k, H, OS, OS_STAR, UNK = train(k, Xs, anns, self.num_classes)
-                        if H > best_H:
-                            best_H = H
-                            best_k = k
-                log_msg = f'\nbest_H\t{best_H} (best_k\t{best_k})'
-                eval_results['k-means'] = best_H
+                anns = {
+                    'train_source': gt_labels[:self.cumsum[0]],
+                    'train_target': None,
+                    'valid': gt_labels[self.cumsum[1]:self.cumsum[2]],  # cheat
+                    'test': gt_labels[self.cumsum[2]:],
+                }
+                metric_option = metric_options.get('sskmeans', {})
+                n_tries = metric_option.get('n_tries', 1)  # default = {'sskmeans': {'n_tries': 1}}
+                fixed_k = metric_option.get('fixed_k', None)
+                _, ks, rows = train_sskmeans(
+                    Xs, anns, num_known_classes=self.num_classes,
+                    fixed_k=fixed_k, n_tries=n_tries, verbose=False
+                )
+                if fixed_k:
+                    # ks = [fixed_k]
+                    global_best_mean_test_score, os_star, unk = rows[0][-4], rows[0][-2], rows[0][-1]
+                    log_msg = f'\nSS k-means H\t{global_best_mean_test_score:.4f}\n{"OS*":>14s}\t{os_star:.4f}\n{"UNK":>14s}\t{unk:.4f} (fixed_k: {fixed_k})'
+                else:
+                    global_best_mean_test_score, global_best_mean_test_k = max(zip([means[-4] for means in rows], ks), key=lambda zipped_row: zipped_row[0])
+                    log_msg = f'\nSS k-means (H)\t{global_best_mean_test_score:.4f} (best_k: {global_best_mean_test_k})'
+                eval_results[metric] = global_best_mean_test_score
+                eval_results['os*'] = os_star
+                eval_results['recall_unknown'] = unk
                 print_log(log_msg, logger=logger)
                 continue
 
@@ -325,6 +345,7 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
                 with p_out.open('wb') as f:
                     pickle.dump(y_, f)
                 log_msg = f'\nSaving logits at {str(p_out)}'
+                continue
 
         return eval_results
 

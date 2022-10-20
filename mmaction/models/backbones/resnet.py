@@ -554,17 +554,37 @@ class ResNet(nn.Module):
     def _freeze_stages(self):
         """Prevent all the parameters from being optimized before
         ``self.frozen_stages``."""
-        if self.frozen_stages >= 0:
-            self.conv1.bn.eval()
-            for m in self.conv1.modules():
+        def _freeze_block(index:int):
+            assert 0 <= index <= self.num_stages
+            if index == 0:
+                self.conv1.bn.eval()
+                for m in self.conv1.modules():
+                    for param in m.parameters():
+                        param.requires_grad = False
+            else:
+                m = getattr(self, f'layer{index}')
+                m.eval()
                 for param in m.parameters():
                     param.requires_grad = False
 
-        for i in range(1, self.frozen_stages + 1):
-            m = getattr(self, f'layer{i}')
-            m.eval()
-            for param in m.parameters():
-                param.requires_grad = False
+        if type(self.frozen_stages) == int:  # last index of frozen stages
+            for i in range(self.frozen_stages+1):
+                _freeze_block(i)
+        elif type(self.frozen_stages) == list:  # indices to freeze
+            for i in self.frozen_stages:
+                _freeze_block(i)
+
+        # if self.frozen_stages >= 0:
+        #     self.conv1.bn.eval()
+        #     for m in self.conv1.modules():
+        #         for param in m.parameters():
+        #             param.requires_grad = False
+
+        # for i in range(1, self.frozen_stages + 1):
+        #     m = getattr(self, f'layer{i}')
+        #     m.eval()
+        #     for param in m.parameters():
+        #         param.requires_grad = False
 
     def _partial_bn(self):
         logger = get_root_logger()
