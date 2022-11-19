@@ -184,7 +184,7 @@ class BaseDAHead(BaseHead):
             # When using soft labels, `labels` and `cls_socre` share the same
             # shape.
             labels = labels.unsqueeze(0)
-        
+
         if self.multi_class and self.label_smooth_eps != 0:
             labels = ((1 - self.label_smooth_eps) * labels +
                       self.label_smooth_eps / self.num_classes)
@@ -298,7 +298,7 @@ class BaseDAContrastiveHead(BaseHead):
                 self.centroids if self.with_given_centroids
                 else torch.stack([c.mean for c in self.centroids])
             )  # [C, n_feat]
-            centroids = centroids.unsqueeze(dim=0)  # [1, C, n_feat]
+            centroids = centroids.unsqueeze(dim=0)   # [1,   C, n_feat]
             distances = (features - centroids) ** 2  # [B*2, C, n_feat]
             distances = distances.mean(dim=2) ** .5  # [B*2, C]
             return -distances

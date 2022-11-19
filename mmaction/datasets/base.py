@@ -16,7 +16,7 @@ import pickle
 from mmcv.utils import print_log
 from torch.utils.data import Dataset
 
-from slurm.gcd4da.commons.kmeans import train_wrapper as train_sskmeans
+from slurm.gcd4da.commons.kmeans_pre import train_wrapper as train_sskmeans
 
 from ..core import (mean_average_precision, mean_class_accuracy,
                     mmit_mean_average_precision, top_k_accuracy,

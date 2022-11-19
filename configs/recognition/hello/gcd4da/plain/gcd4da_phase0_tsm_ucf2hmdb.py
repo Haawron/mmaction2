@@ -1,4 +1,4 @@
-from configs.recognition.hello.gcd4da.plain.__base__.gcd4da_phase0_tsm_ucfhmdb import data, evaluation
+from configs.recognition.hello.gcd4da.plain._base_.gcd4da_phase0_tsm_ucfhmdb import data, evaluation
 _base_ = ['./__base__/gcd4da_phase0_tsm_ucfhmdb.py']
 
 
