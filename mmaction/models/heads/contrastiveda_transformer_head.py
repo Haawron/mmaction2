@@ -27,16 +27,15 @@ class ContrastiveDATransformerHead(BaseDAContrastiveHead):
         self._init_centroids(centroids)
 
     def _init_centroids(self, centroids={}):
-        if self.print_mca:
-            if centroids.get('p_centroid', None):
-                self.with_given_centroids = True
-                import pickle
-                with open(centroids['p_centroid'], 'rb') as f:
-                    self.centroids = torch.from_numpy(pickle.load(f)).cuda()
-                assert self.centroids.shape[0] == self.num_classes, f'Size mismatched: {(self.centroids.shape[0], self.num_classes)}'
-            else:  # centroids are needed only for scoring
-                self.with_given_centroids = False
-                self.centroids = [RunningAverage() for _ in range(self.num_classes)]
+        if centroids.get('p_centroid', None):
+            self.with_given_centroids = True
+            import pickle
+            with open(centroids['p_centroid'], 'rb') as f:
+                self.centroids = torch.from_numpy(pickle.load(f)).cuda()
+            assert self.centroids.shape[0] == self.num_classes, f'Size mismatched: {(self.centroids.shape[0], self.num_classes)}'
+        else:  # centroids are needed only for scoring
+            self.with_given_centroids = False
+            self.centroids = [RunningAverage() for _ in range(self.num_classes)]
 
     def init_weights(self):
         """Initiate the parameters from scratch."""

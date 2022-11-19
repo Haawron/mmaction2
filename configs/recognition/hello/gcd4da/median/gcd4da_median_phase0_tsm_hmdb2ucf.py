@@ -1,6 +1,20 @@
-from configs.recognition.hello.gcd4da.plain.__base__.gcd4da_phase0_tsm_ucfhmdb import img_norm_cfg
-from configs.recognition.hello.gcd4da.plain.gcd4da_phase0_tsm_hmdb2ucf import data, ann_file_train_source, ann_file_train_target, evaluation
-_base_ = ['../plain/__base__/gcd4da_phase0_tsm_ucfhmdb.py']
+_base_ = [
+    '../_base_/gcd4da_tsm_model.py',
+    '../_base_/gcd4da_tsm_training.py',
+    # '../_base_/gcd4da_tsm_data_hmdb2ucf.py',
+    '../../../../_base_/default_runtime.py',
+]
+
+
+_num_classes = 12  # '_' at start: to avoid conflicting keys among bases
+
+# dataset settings
+data_prefix_source = '/local_datasets/hmdb51/rawframes'
+data_prefix_target = '/local_datasets/ucf101/rawframes'
+ann_file_train_source = 'data/_filelists/hmdb51/filelist_hmdb_train_closed.txt'
+ann_file_train_target = 'data/_filelists/ucf101/filelist_ucf_train_open.txt'
+ann_file_valid_target = 'data/_filelists/ucf101/filelist_ucf_val_open.txt'
+ann_file_test_target = 'data/_filelists/ucf101/filelist_ucf_test_open.txt'
 
 img_norm_cfg = dict(
     mean=[128., 128., 128.], std=[50., 50., 50.], to_bgr=False)
@@ -33,12 +47,130 @@ train_pipeline = [
     dict(type='Collect', keys=['imgs', 'label'], meta_keys=[]),
     dict(type='ToTensor', keys=['imgs', 'label'])
 ]
-
-data['train'][0]['pipeline'] = train_pipeline
-data['train'][1]['pipeline'] = train_pipeline
-
-work_dir = 'work_dirs/hello/ucf2hmdb/tsm/gcd4da'
-load_from = 'work_dirs/train_output/hmdb2ucf/tsm/vanilla/source-only/4382__vanilla-tsm-hmdb2ucf-source-only/2/20220728-205928/best_mean_class_accuracy_epoch_30.pth'
-
-evaluation['metrics'].append('logits')
-evaluation['metric_options'] = dict(logits=dict(p_out_dir=work_dir))
+val_pipeline = [
+    dict(
+        type='SampleFrames',
+        clip_len=1,
+        frame_interval=1,
+        num_clips=8,
+        test_mode=True),
+    dict(type='RawFrameDecode'),
+    dict(type='Resize', scale=(-1, 256)),
+    dict(type='CenterCrop', crop_size=224),
+    dict(type='Flip', flip_ratio=0),
+    dict(type='Normalize', **img_norm_cfg),
+    dict(type='FormatShape', input_format='NCHW'),
+    dict(type='Collect', keys=['imgs', 'label'], meta_keys=[]),
+    dict(type='ToTensor', keys=['imgs'])
+]
+test_pipeline = [
+    dict(
+        type='SampleFrames',
+        clip_len=1,
+        frame_interval=1,
+        num_clips=8,
+        test_mode=True),
+    dict(type='RawFrameDecode'),
+    dict(type='Resize', scale=(-1, 256)),
+    dict(type='CenterCrop', crop_size=224),
+    dict(type='Flip', flip_ratio=0),
+    dict(type='Normalize', **img_norm_cfg),
+    dict(type='FormatShape', input_format='NCHW'),
+    dict(type='Collect', keys=['imgs', 'label'], meta_keys=[]),
+    dict(type='ToTensor', keys=['imgs'])
+]
+data = dict(
+    videos_per_gpu=32,
+    workers_per_gpu=4,
+    val_dataloader=dict(videos_per_gpu=20),
+    train=[
+        dict(
+            type='ContrastiveRawframeDataset',
+            ann_file=ann_file_train_source,
+            data_prefix=data_prefix_source,
+            start_index=1,  # frame number starts with
+            filename_tmpl='img_{:05}.jpg',
+            sample_by_class=True,
+            pipeline=train_pipeline),
+        dict(
+            type='ContrastiveRawframeDataset',
+            ann_file=ann_file_train_target,
+            data_prefix=data_prefix_target,
+            start_index=1,
+            filename_tmpl='img_{:05}.jpg',
+            sample_by_class=True,
+            pipeline=train_pipeline),
+    ],
+    val=dict(
+        type='ConcatDataset',
+        datasets=[
+            dict(
+                type='RawframeDataset',
+                ann_file=ann_file_train_source,
+                data_prefix=data_prefix_source,
+                start_index=1,
+                num_classes=_num_classes,
+                filename_tmpl='img_{:05}.jpg',
+                pipeline=val_pipeline),
+            dict(
+                type='RawframeDataset',
+                ann_file=ann_file_train_target,
+                data_prefix=data_prefix_target,
+                start_index=1,
+                num_classes=_num_classes,
+                filename_tmpl='img_{:05}.jpg',
+                pipeline=val_pipeline),
+            dict(
+                type='RawframeDataset',
+                ann_file=ann_file_valid_target,
+                data_prefix=data_prefix_target,
+                start_index=1,
+                num_classes=_num_classes,
+                filename_tmpl='img_{:05}.jpg',
+                pipeline=val_pipeline),
+            dict(
+                type='RawframeDataset',
+                ann_file=ann_file_valid_target,
+                data_prefix=data_prefix_target,
+                start_index=1,
+                num_classes=_num_classes,
+                filename_tmpl='img_{:05}.jpg',
+                pipeline=val_pipeline),
+        ]),
+    test=dict(
+        type='ConcatDataset',
+        datasets=[
+            dict(
+                type='RawframeDataset',
+                ann_file=ann_file_train_source,
+                data_prefix=data_prefix_source,
+                start_index=1,
+                num_classes=_num_classes,
+                filename_tmpl='img_{:05}.jpg',
+                pipeline=test_pipeline),
+            dict(
+                type='RawframeDataset',
+                ann_file=ann_file_train_target,
+                data_prefix=data_prefix_target,
+                start_index=1,
+                num_classes=_num_classes,
+                filename_tmpl='img_{:05}.jpg',
+                pipeline=test_pipeline),
+            dict(
+                type='RawframeDataset',
+                ann_file=ann_file_valid_target,
+                data_prefix=data_prefix_target,
+                start_index=1,
+                num_classes=_num_classes,
+                filename_tmpl='img_{:05}.jpg',
+                pipeline=test_pipeline),
+            dict(
+                type='RawframeDataset',
+                ann_file=ann_file_test_target,
+                data_prefix=data_prefix_target,
+                start_index=1,
+                num_classes=_num_classes,
+                filename_tmpl='img_{:05}.jpg',
+                pipeline=test_pipeline),
+        ])
+)

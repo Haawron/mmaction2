@@ -26,6 +26,8 @@ for dataset in ucf101 hmdb51; do
     rm -rf data
     rm "${dataset}_rawframes.tar"
 
+    cd -
+
     echo -e "done.\n\n"
   fi
 done

@@ -263,7 +263,7 @@ def get_best_info_by_target_workdir(p_target_workdir, select_model_by='mca', ign
             p_logs_and_score_dicts = [(p_log, score_dict) for p_log, score_dict in p_logs_and_score_dicts if p_log2jid(p_log) >= 19000]
         if p_logs_and_score_dicts:
             p_logs, score_dicts = zip(*p_logs_and_score_dicts)
-            arg_best = max(range(len(score_dicts)), key=lambda i: score_dicts[i].get(select_model_by, score_dicts[i].get('mca', 0)))
+            arg_best = max(range(len(score_dicts)), key=lambda i: score_dicts[i].get(select_model_by, score_dicts[i].get('h', score_dicts[i].get('mca', 0))))
             p_log = p_logs[arg_best]
             jid = p_log2jid(p_log)
 

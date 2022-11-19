@@ -69,7 +69,8 @@ class KMeans(object):
             sim = X @ Y.T / (norm_X * norm_Y)**.5
             sim[(sim>1.)  & (abs(sim-1.)<1e-4)] = 1.
             sim[(sim<-1.) & (abs(sim+1.)<1e-4)] = -1.
-            return np.arccos(sim)
+            theta = np.arccos(sim)
+            return theta
         else:
             return pairwise_distances(X, self.centroids, metric=self.metric)
 
@@ -89,8 +90,8 @@ class KMeans(object):
             :type data: np.array
         """
         weights = (1-self.alpha) * np.ones_like(X)
-        kd = np.array(reduce(lambda x1, x2: np.hstack([x1, x2]), self.known_data, np.array([])), dtype=np.int64)
-        weights[kd] = self.alpha
+        all_known_data = np.array(reduce(lambda x1, x2: np.hstack([x1, x2]), self.known_data, np.array([])), dtype=np.int64)
+        weights[all_known_data] = self.alpha
         weights = weights / weights.sum()
 
         for i in range(self.k):
@@ -165,11 +166,14 @@ class KMeans(object):
                 print(f"Iter {counter:3d}\tDiff: {diff:.4e}")
         return self
 
-    def predict(self, X_):
+    def predict(self, X_, only_known=False):
         """
             :return: The labels of the data
             :rtype: np.array
         """
-        new_labels = np.argmin(self._get_distance(X_), axis=1).astype(np.int64)
+        distances = self._get_distance(X_)
+        if only_known:
+            distances = distances[:]
+        new_labels = np.argmin(distances, axis=1).astype(np.int64)
 
         return new_labels
