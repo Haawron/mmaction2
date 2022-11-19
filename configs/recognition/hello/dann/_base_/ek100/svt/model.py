@@ -1,10 +1,11 @@
-num_classes = 5
-domain_adaptation = False
+num_classes = 5+1
+domain_adaptation = True
 find_unused_parameters = True
 
 # model settings
 model = dict(
-    type='Recognizer3D',
+    type='DARecognizer3D',
+    contrastive=False,
     backbone=dict(
         type='TimeSformer',
         pretrained=None,  # check load_from
@@ -14,15 +15,19 @@ model = dict(
         embed_dims=768,
         in_channels=3,
         dropout_ratio=0.,
-        frozen_stages=11,
         transformer_layers=None,
+        frozen_stages=11,  # number of stages (total 12)
+        norm_eval=False,
         attention_type='divided_space_time',
         norm_cfg=dict(type='LN', eps=1e-6)),
     cls_head=dict(
-        type='DINOHead',
+        type='DANNDINODAHead',
+        loss_cls=dict(
+            type='DANNLoss',
+            num_classes=num_classes),
         in_channels=768,
-        num_classes=5,
+        num_classes=num_classes,
         print_mca=False),
     # model training and testing settings
     train_cfg=None,
-    test_cfg=dict(average_clips='prob')) 
+    test_cfg=dict(average_clips='score'))

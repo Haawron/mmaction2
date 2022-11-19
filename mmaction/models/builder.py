@@ -67,8 +67,9 @@ def build_model(cfg, train_cfg=None, test_cfg=None):
     """Build model."""
     args = cfg.copy()
     obj_type = args.pop('type')
-    if obj_type in LOCALIZERS:
-        return build_localizer(cfg)
+    print(obj_type)
+    # if obj_type in LOCALIZERS:
+    #     return build_localizer(cfg)
     if obj_type in RECOGNIZERS:
         return build_recognizer(cfg, train_cfg, test_cfg)
     if obj_type in DETECTORS:

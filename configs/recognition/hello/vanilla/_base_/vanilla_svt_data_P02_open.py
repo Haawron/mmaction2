@@ -1,8 +1,8 @@
 # dataset settings
 data_prefix = '/local_datasets/epic-kitchens-100/EPIC-KITCHENS'
-ann_file_train = 'data/_filelists/ek100/filelist_P02_train_closed.txt'
-ann_file_valid = 'data/_filelists/ek100/filelist_P02_valid_closed.txt'
-ann_file_test  = 'data/_filelists/ek100/filelist_P02_test_closed.txt'
+ann_file_train = 'data/_filelists/ek100/filelist_P02_train_open.txt'
+ann_file_valid = 'data/_filelists/ek100/filelist_P02_valid_open.txt'
+ann_file_test  = 'data/_filelists/ek100/filelist_P02_test_open.txt'
 
 img_norm_cfg = dict(
     mean=[127.5, 127.5, 127.5], std=[127.5, 127.5, 127.5], to_bgr=False)
@@ -51,7 +51,7 @@ test_pipeline = [
 ]
 data = dict(
     videos_per_gpu=96,
-    workers_per_gpu=16,
+    workers_per_gpu=4,
     test_dataloader=dict(videos_per_gpu=32),
     train=dict(
         type='RawframeDataset',
