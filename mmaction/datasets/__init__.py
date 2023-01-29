@@ -19,6 +19,7 @@ from .ssn_dataset import SSNDataset
 from .video_dataset import VideoDataset
 from .uda_rawframe_dataset import UDARawframeDataset
 from .contrastive_rawframe_dataset import ContrastiveRawframeDataset
+from .contrastive_video_dataset import ContrastiveVideoDataset
 
 __all__ = [
     'VideoDataset', 'build_dataloader', 'build_dataset', 'RepeatDataset',
@@ -26,5 +27,6 @@ __all__ = [
     'HVUDataset', 'AudioDataset', 'AudioFeatureDataset', 'ImageDataset',
     'RawVideoDataset', 'AVADataset', 'AudioVisualDataset',
     'BaseMiniBatchBlending', 'CutmixBlending', 'MixupBlending', 'DATASETS',
-    'PIPELINES', 'BLENDINGS', 'PoseDataset', 'ConcatDataset', 'ContrastiveRawframeDataset'
+    'PIPELINES', 'BLENDINGS', 'PoseDataset', 'ConcatDataset', 'ContrastiveRawframeDataset',
+    'ContrastiveVideoDataset',
 ]

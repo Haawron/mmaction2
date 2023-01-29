@@ -24,5 +24,5 @@ optimizer_config = dict(grad_clip=dict(max_norm=40, norm_type=2))
 # learning policy
 lr_config = dict(policy='CosineAnnealing', min_lr=lr*1e-3)
 total_epochs = 50
-work_dir = './work_dirs/train_output/hello/'
+work_dir = './work_dirs/train_output/hello/cdar/gcd'
 load_from = None
