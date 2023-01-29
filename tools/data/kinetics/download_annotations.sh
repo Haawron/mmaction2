@@ -8,7 +8,8 @@ else
         exit 0
 fi
 
-DATA_DIR="../../../data/${DATASET}/annotations"
+# DATA_DIR="../../../data/${DATASET}/annotations"
+DATA_DIR="./${DATASET}/annotations"
 
 if [[ ! -d "${DATA_DIR}" ]]; then
   echo "${DATA_DIR} does not exist. Creating";
