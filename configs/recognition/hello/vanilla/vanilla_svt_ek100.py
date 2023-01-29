@@ -21,7 +21,7 @@ model = dict(
         norm_cfg=dict(type='LN', eps=1e-6)),
     cls_head=dict(type='TimeSformerHead', num_classes=num_classes, in_channels=768),
     test_cfg=dict(average_clips='score'))
-    
+
 # dataset settings
 data_root = '/local_datasets/epic-kitchens-100/EPIC-KITCHENS'
 ann_file_train = 'data/_filelists/ek100/filelist_P02_train_closed.txt'
@@ -30,7 +30,7 @@ ann_file_test  = 'data/_filelists/ek100/filelist_P02_test_open.txt'
 
 img_norm_cfg = dict(
     mean=[127.5, 127.5, 127.5], std=[127.5, 127.5, 127.5], to_bgr=False)
-    
+
 train_pipeline = [
     dict(type='SampleFrames', clip_len=8, frame_interval=32, num_clips=1),
     dict(type='RawFrameDecode'),
@@ -66,7 +66,7 @@ test_pipeline = [
         test_mode=True),
     dict(type='RawFrameDecode'),
     dict(type='Resize', scale=(-1, 224)),
-    dict(type='ThreeCrop', crop_size=224),
+    dict(type='CenterCrop', crop_size=224),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='FormatShape', input_format='NCTHW'),
     dict(type='Collect', keys=['imgs', 'label'], meta_keys=[]),

@@ -11,6 +11,7 @@ import ssl
 import subprocess
 import uuid
 from collections import OrderedDict
+from pathlib import Path
 
 import pandas as pd
 from joblib import Parallel, delayed
@@ -105,7 +106,9 @@ def download_clip(video_identifier,
                 else:
                     break
 
-        tmp_filename = glob.glob('%s*' % tmp_filename.split('.')[0])[0]
+        tmp_filename = Path(tmp_filename)
+        tmp_filename = str(list(tmp_filename.parent.glob(f'{tmp_filename.stem}*'))[0])
+        # files = glob.glob('%s*' % tmp_filename.split('.')[0])
         # Construct command to trim the videos (ffmpeg required).
         command = [
             'ffmpeg', '-i',

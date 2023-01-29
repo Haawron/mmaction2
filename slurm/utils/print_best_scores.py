@@ -1,4 +1,3 @@
-from nis import match
 from pathlib import Path
 import re
 import argparse
@@ -39,6 +38,8 @@ METRICS = METRICS2DISPLAY.values()
 DATASETSHORTCUTS = {
     'u2h': 'ucf2hmdb',
     'h2u': 'hmdb2ucf',
+    'b2k': 'babel2kinetics',
+    'k2b': 'kinetics2babel',
 }
 
 
@@ -150,7 +151,8 @@ def print_df_from_config_vars(
     pattern = r'\d+__[^/]*$'
 
     df_list = []
-    for p_target_workdir in [p for p in p_target_workdir_parent.glob('**/*') if p.is_dir() and re.search(pattern, str(p))]:
+    p_target_workdir_cadidates = [p for p in p_target_workdir_parent.glob('**/*') if p.is_dir() and re.search(pattern, str(p))]
+    for p_target_workdir in p_target_workdir_cadidates:
         info = get_best_info_by_target_workdir(p_target_workdir, select_model_by, ignore_old_models)
         if info:
             df = info2df(info)
@@ -299,10 +301,11 @@ def get_validated_p_target_workdir(
         # gcd4da:  p_train_workdirs / dataset / backbone / model / debias / phase / ablation / task
         # else:    p_train_workdirs / dataset / backbone / model / task
 
-    # for ucf2hmdb, hmdb2ucf, ...
-        # vanilla: p_train_workdirs / dataset / backbone / model / task
-        # gcd4da:  p_train_workdirs / dataset / backbone / model / debias / phase / ablation
-        # else:    p_train_workdirs / dataset / backbone / model
+    # for ucf2hmdb, hmdb2ucf, babel2kinetics, kinetics2babel
+        # linear_probe: p_train_workdirs / dataset / backbone / model / probed_on  # not implemented
+        # vanilla:      p_train_workdirs / dataset / backbone / model / task
+        # gcd4da, cdar: p_train_workdirs / dataset / backbone / model / debias / phase / ablation
+        # else:         p_train_workdirs / dataset / backbone / model
 
     if model == 'vanilla':
         if one_line:

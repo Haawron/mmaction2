@@ -13,6 +13,8 @@ import numpy as np
 import torch
 import time
 import pickle
+import inspect
+from sklearn.cluster import KMeans
 from mmcv.utils import print_log
 from torch.utils.data import Dataset
 
@@ -22,9 +24,14 @@ from ..core import (mean_average_precision, mean_class_accuracy,
                     mmit_mean_average_precision, top_k_accuracy,
                     confusion_matrix)
 from .pipelines import Compose
+from .custom_metrics import split_cluster_acc_v2, split_cluster_acc_v2_balanced
 
 # from slurm.gcd4da.commons.kmeans import train
 
+END = '\033[0m'
+BOLD = '\033[1m'
+GREEN = '\033[92m'
+PURPLE = '\033[95m'
 
 class BaseDataset(Dataset, metaclass=ABCMeta):
     """Base class for datasets.
@@ -189,7 +196,8 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
         metrics = metrics if isinstance(metrics, (list, tuple)) else [metrics]
         allowed_metrics = [
             'top_k_accuracy', 'mean_class_accuracy', 'H_mean_class_accuracy', 'mean_average_precision',
-            'mmit_mean_average_precision', 'recall_unknown', 'confusion_matrix', 'kmeans', 'sskmeans', 'logits'
+            'mmit_mean_average_precision', 'recall_unknown', 'confusion_matrix', 'kmeans', 'sskmeans', 'logits',
+            'gcd_v2',
         ]
 
         for metric in metrics:
@@ -198,15 +206,11 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
 
         eval_results = OrderedDict()
         if metric_options.get('use_predefined_labels', False):
-            gt_labels = self.predefined_labels
+            gt_labels:list = self.predefined_labels
         else:
-            gt_labels = [ann['label'] for ann in self.video_infos]
+            gt_labels:list = [ann['label'] for ann in self.video_infos]
 
         results = np.array(results)
-        # 이거 왜 있지?
-        # if self.num_classes:
-        #     if results.shape[1] > self.num_classes:
-        #         results = np.hstack([results[:,:self.num_classes-1], results[:,self.num_classes-1:].max(axis=1, keepdims=True)])
 
         for metric in metrics:
             msg = f'Evaluating {metric} ...'
@@ -287,7 +291,7 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
                 pred = np.argmax(results, axis=1)
                 conf = confusion_matrix(pred, gt_labels)
                 h, w = conf.shape
-                with np.printoptions(threshold=np.inf, linewidth=100000):
+                with np.printoptions(threshold=np.inf, linewidth=np.inf):  # thres: # elems, width: # chars
                     s = str(conf)
                 if 'SRUN_DEBUG' in os.environ:  # if in srun(debuging) session
                     for start, end in reversed([(m.start(0), m.end(0)) for i, m in enumerate(re.finditer(r'\d+', str(s))) if i%h == i//w]):
@@ -297,7 +301,36 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
                 continue
 
             if metric == 'kmeans':
-                pass
+                # make sure model.test_cfg.feature_extraction=True
+                gt_labels = np.array(gt_labels)
+                num_old_classes = metric_options.setdefault('num_old_classes', gt_labels.max()+1)
+                is_closed_set = gt_labels.max()+1 <= num_old_classes
+                num_all_classes = num_old_classes if is_closed_set else metric_options.setdefault('num_all_classes', gt_labels.max()+1)
+                kmeans = KMeans(init='k-means++', n_clusters=num_all_classes)
+                kmeans.fit(results)
+                pred = kmeans.labels_
+                old_mask = (gt_labels < num_old_classes)
+                total_acc, old_acc, new_acc, conf = split_cluster_acc_v2(gt_labels, pred, old_mask, return_conf=True)
+                log_msg = '\n' + inspect.cleandoc(f'''
+                    K-Means:
+                        ALL: {total_acc:.4f}
+                        Old: {old_acc:.4f}
+                        New: {new_acc:.4f}
+                ''')
+                eval_results[metric] = total_acc
+                eval_results[metric+'_old'] = old_acc
+                eval_results[metric+'_new'] = new_acc
+
+                # confmat
+                h, w = conf.shape
+                with np.printoptions(threshold=np.inf, linewidth=np.inf):  # thres: # elems, width: # chars
+                    s = str(conf)
+                if 'SRUN_DEBUG' in os.environ:  # if in srun(debuging) session
+                    for (ii, jj), (start, end) in reversed([((i//w, i%h), (m.start(0), m.end(0))) for i, m in enumerate(re.finditer(r'\d+', str(s))) if i%h == i//w]):
+                        s = s[:start] + BOLD + (GREEN if max(ii, jj) < num_old_classes else PURPLE) + s[start:end] + END + s[end:]  # diag vals to be bold
+                log_msg += '\nConfmat (gt/pred)\n' + s + '\n'
+                print_log(log_msg, logger=logger)
+                continue
 
             if metric == 'sskmeans':
                 # to resolve circular import
@@ -345,6 +378,72 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
                 with p_out.open('wb') as f:
                     pickle.dump(y_, f)
                 log_msg = f'\nSaving logits at {str(p_out)}'
+                continue
+
+            if metric == 'gcd_v2':
+                # to resolve circular import
+                from mmaction.datasets.dataset_wrappers import ConcatDataset
+                from slurm.gcd4da.commons.kmeans import SSKMeansTrainer as SSKMeans
+                if type(self) != ConcatDataset:
+                    print_log('\tpassed because `self` is not an instance of `ConcatDataset`\n', logger=logger)
+                    continue
+
+                gt_labels = np.array(gt_labels)
+                num_old_classes = metric_options.setdefault('num_old_classes', gt_labels.max()+1)
+                num_all_classes = metric_options.setdefault('num_all_classes', gt_labels.max()+1)
+
+                feat_source = results[:self.cumsum[0]]
+                feat_target = results[self.cumsum[0]:]
+                gt_source = gt_labels[:self.cumsum[0]]
+                gt_target = gt_labels[self.cumsum[0]:]
+                sskmeans = SSKMeans(ks=num_all_classes, autoinit=False, num_known_classes=num_old_classes, verbose=False)
+                sskmeans.Xs = {
+                    'train_source': feat_source[gt_source<num_old_classes],
+                    'train_target': feat_target,
+                    'valid': feat_target,
+                    'test': feat_target,
+                }
+                sskmeans.anns = {
+                    'train_source': gt_source[gt_source<num_old_classes],
+                    'train_target': gt_target,
+                    'valid': gt_target,
+                    'test': gt_target,
+                }
+                sskmeans.train()
+
+                pred_target = sskmeans.predict(sskmeans.model_best)['test']
+                old_mask = (gt_target < num_old_classes)
+                total_acc, old_acc, new_acc, conf = split_cluster_acc_v2(gt_target, pred_target, old_mask, True)
+                log_msg = '\n' + inspect.cleandoc(f'''
+                    SS k-means (GCD V2; ss k-means -ed on source+target train sets and evaluated on target train set):
+                        ALL: {total_acc:.4f}
+                        Old: {old_acc:.4f}
+                        New: {new_acc:.4f}
+                ''')
+                eval_results[metric] = total_acc
+                eval_results[metric+'_old'] = old_acc
+                eval_results[metric+'_new'] = new_acc
+                total_acc, old_acc, new_acc = split_cluster_acc_v2_balanced(gt_target, pred_target, old_mask)
+                log_msg += '\n' + inspect.cleandoc(f'''
+                    SS k-means (GCD V2 Balanced):
+                        ALL: {total_acc:.4f}
+                        Old: {old_acc:.4f}
+                        New: {new_acc:.4f}
+                ''')
+                eval_results[metric+'_balanced'] = total_acc
+                eval_results[metric+'_balanced_old'] = old_acc
+                eval_results[metric+'_balanced_new'] = new_acc
+
+                # confmat
+                h, w = conf.shape
+                with np.printoptions(threshold=np.inf, linewidth=np.inf):  # thres: # elems, width: # chars
+                    s = str(conf)
+                if 'SRUN_DEBUG' in os.environ:  # if in srun(debugging) session
+                    for (ii, jj), (start, end) in reversed([((i//w, i%h), (m.start(0), m.end(0))) for i, m in enumerate(re.finditer(r'\d+', str(s))) if i%h == i//w]):
+                        s = s[:start] + BOLD + (GREEN if max(ii, jj) < num_old_classes else PURPLE) + s[start:end] + END + s[end:]  # diag vals to be bold
+                log_msg += '\nConfmat (gt/pred)\n' + s + '\n'
+
+                print_log(log_msg, logger=logger)
                 continue
 
         return eval_results
