@@ -18,8 +18,8 @@ project='cdar'
 task='03_simnreal'  # table name
 subtask='01_babel_k400'  # column
 model='03_gcd'  # row
-add_on='warmup'
-extra_setting='default'  # 'default' if none
+add_on='default'
+extra_setting='warmup'  # 'default' if none
 path_experiment="${project}/${task}/${subtask}/${model}/${add_on}/${extra_setting}"
 
 workdir="work_dirs/train_output"

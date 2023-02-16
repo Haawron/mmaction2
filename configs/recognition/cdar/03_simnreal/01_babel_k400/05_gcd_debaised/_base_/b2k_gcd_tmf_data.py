@@ -54,6 +54,18 @@ dataset_settings = dict(
 img_norm_cfg = dict(
     mean=[127.5, 127.5, 127.5], std=[127.5, 127.5, 127.5], to_bgr=False)
 
+blend_options = dict(
+    p=.5, resize_h=256, crop_size=224,
+    ann_files=[
+        # dataset_settings['source']['train']['ann_file'],
+        dataset_settings['target']['train']['ann_file']],
+    data_prefixes=[
+        # '/local_datasets/median/babel/train',
+        '/local_datasets/median/k400/train'],
+    alpha='random',  # blend ratio of origin image
+    blend_label=False
+)
+
 pipelines = dict(
     source=dict(
         train=[
@@ -61,6 +73,7 @@ pipelines = dict(
             dict(type='RawFrameDecode'),
             dict(type='RandomRescale', scale_range=(256, 320)),
             dict(type='RandomCrop', size=224),
+            dict(type='BackgroundBlend', **blend_options),
             dict(type='Flip', flip_ratio=0.5),
             dict(type='ColorJitter', hue=.5),
             dict(type='Normalize', **img_norm_cfg),
@@ -86,6 +99,7 @@ pipelines = dict(
             dict(type='DecordDecode'),
             dict(type='RandomRescale', scale_range=(256, 320)),
             dict(type='RandomCrop', size=224),
+            dict(type='BackgroundBlend', **blend_options),
             dict(type='Flip', flip_ratio=0.5),
             dict(type='Normalize', **img_norm_cfg),
             dict(type='FormatShape', input_format='NCTHW'),

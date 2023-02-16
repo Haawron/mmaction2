@@ -1,6 +1,6 @@
 _base_ = [
-    './_base_/b2k_tsf_warmup_data.py',
+    './_base_/b2k_gcd_tmf_data.py',
     '../_base_/b2k_training.py',
-    '../../_base_/tsf_warmup_model.py',
+    '../../_base_/gcd_model.py',
     '../../../../../_base_/default_runtime.py',
 ]

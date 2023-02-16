@@ -1112,16 +1112,17 @@ class DecordInit:
             self.file_client = FileClient(self.io_backend, **self.kwargs)
 
         file_obj = io.BytesIO(self.file_client.get(results['filename']))
-        try:
-            container = decord.VideoReader(file_obj, num_threads=self.num_threads)
-        except decord._ffi.base.DECORDError as e:
-            if 'kinetics' in results['filename']:
-                p_file = Path(results['filename'])
-                labelname = p_file.parent.name
-                p_fail = Path(f'tools/data/kinetics/kinetics400/failed/{labelname}')
-                p_fail.mkdir(parents=True, exist_ok=True)
-                with (p_fail / p_file.stem).open('w') as f:
-                    pass
+        container = decord.VideoReader(file_obj, num_threads=self.num_threads)
+        # try:
+        #     container = decord.VideoReader(file_obj, num_threads=self.num_threads)
+        # except decord._ffi.base.DECORDError as e:
+        #     if 'kinetics' in str(results['filename']):
+        #         p_file = Path(results['filename'])
+        #         labelname = p_file.parent.name
+        #         p_fail = Path(f'tools/data/kinetics/kinetics400/failed/{labelname}')
+        #         p_fail.mkdir(parents=True, exist_ok=True)
+        #         with (p_fail / p_file.stem).open('w') as f:
+        #             pass
         results['video_reader'] = container
         results['total_frames'] = len(container)
         return results

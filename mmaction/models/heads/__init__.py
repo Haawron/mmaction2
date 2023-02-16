@@ -26,6 +26,7 @@ from .timesformer_cop_head import TimeSFormerCOPHead
 from .dino_head import DINODAHead, TSMDINODAHead, DINOHead
 from .osbp_svt_head import OSBPDINODAHead
 from .dann_svt_head import DANNDINODAHead
+from .places_head import PlacesHead
 
 __all__ = [
     'TSNHead', 'I3DHead', 'BaseHead', 'TSMHead', 'SlowFastHead', 'SSNHead',
@@ -33,5 +34,5 @@ __all__ = [
     'FBOHead', 'LFBInferHead', 'TRNHead', 'TimeSformerHead', 'ACRNHead',
     'STGCNHead', 'OSBPTSMHead', 'DANNTSMHead', 'ContrastiveDATSMHead', 'TSMCOPHead',
     'X3DCOPHead', 'ContrastiveDATransformerHead', 'TimeSFormerCOPHead', 'DINODAHead',
-    'TSMDINODAHead', 'OSBPDINODAHead', 'DANNDINODAHead', 'DINOHead'
+    'TSMDINODAHead', 'OSBPDINODAHead', 'DANNDINODAHead', 'DINOHead', 'PlacesHead'
 ]
