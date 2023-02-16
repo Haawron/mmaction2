@@ -197,7 +197,7 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
         allowed_metrics = [
             'top_k_accuracy', 'mean_class_accuracy', 'H_mean_class_accuracy', 'mean_average_precision',
             'mmit_mean_average_precision', 'recall_unknown', 'confusion_matrix', 'kmeans', 'sskmeans', 'logits',
-            'gcd_v2',
+            'gcd_v2', 'gcd_v2_cheated'
         ]
 
         for metric in metrics:
@@ -302,6 +302,9 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
 
             if metric == 'kmeans':
                 # make sure model.test_cfg.feature_extraction=True
+                # to resolve circular import
+                from mmaction.datasets.dataset_wrappers import ConcatDataset
+                only_target = type(self) == ConcatDataset  # evaluate only target if test else evaluate source if valid
                 gt_labels = np.array(gt_labels)
                 num_old_classes = metric_options.setdefault('num_old_classes', gt_labels.max()+1)
                 is_closed_set = gt_labels.max()+1 <= num_old_classes
@@ -310,7 +313,13 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
                 kmeans.fit(results)
                 pred = kmeans.labels_
                 old_mask = (gt_labels < num_old_classes)
-                total_acc, old_acc, new_acc, conf = split_cluster_acc_v2(gt_labels, pred, old_mask, return_conf=True)
+                if only_target:
+                    # gt_labels = gt_labels[self.cumsum[0]:]  # this line is in the for loop, gt_labels should not be changed
+                    pred = pred[self.cumsum[0]:]
+                    old_mask = old_mask[self.cumsum[0]:]
+                    total_acc, old_acc, new_acc, conf = split_cluster_acc_v2(gt_labels[self.cumsum[0]:], pred, old_mask, return_conf=True)
+                else:
+                    total_acc, old_acc, new_acc, conf = split_cluster_acc_v2(gt_labels, pred, old_mask, return_conf=True)
                 log_msg = '\n' + inspect.cleandoc(f'''
                     K-Means:
                         ALL: {total_acc:.4f}
@@ -420,9 +429,9 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
                         Old: {old_acc:.4f}
                         New: {new_acc:.4f}
                 ''')
-                eval_results[metric] = total_acc
-                eval_results[metric+'_old'] = old_acc
-                eval_results[metric+'_new'] = new_acc
+                eval_results['gcd_v2'] = total_acc
+                eval_results['gcd_v2_old'] = old_acc
+                eval_results['gcd_v2_new'] = new_acc
                 total_acc, old_acc, new_acc = split_cluster_acc_v2_balanced(gt_target, pred_target, old_mask)
                 log_msg += '\n' + inspect.cleandoc(f'''
                     SS k-means (GCD V2 Balanced):
@@ -430,9 +439,9 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
                         Old: {old_acc:.4f}
                         New: {new_acc:.4f}
                 ''')
-                eval_results[metric+'_balanced'] = total_acc
-                eval_results[metric+'_balanced_old'] = old_acc
-                eval_results[metric+'_balanced_new'] = new_acc
+                eval_results['gcd_v2_balanced'] = total_acc
+                eval_results['gcd_v2_balanced_old'] = old_acc
+                eval_results['gcd_v2_balanced_new'] = new_acc
 
                 # confmat
                 h, w = conf.shape
@@ -445,6 +454,40 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
 
                 print_log(log_msg, logger=logger)
                 continue
+
+            if metric == 'gcd_v2_cheated':
+                gt_labels = np.array(gt_labels)
+                num_old_classes = metric_options.setdefault('num_old_classes', gt_labels.max()+1)
+                num_all_classes = metric_options.setdefault('num_all_classes', gt_labels.max()+1)
+                pred = np.argmax(results, axis=1)
+                conf = confusion_matrix(pred, gt_labels)
+                corrects = conf.diagonal()
+                topk_all = corrects.sum() / gt_labels.shape[0]
+                topk_old = corrects[:num_old_classes].sum() / conf[:num_old_classes].sum()
+                topk_new = corrects[num_old_classes:].sum() / conf[num_old_classes:].sum()
+                recalls = corrects / conf.sum(axis=1)
+                mca_all = recalls.mean()
+                mca_old = recalls[:num_old_classes].mean()
+                mca_new = recalls[num_old_classes:].mean()
+                log_msg = '\n' + inspect.cleandoc(f'''
+                    Cheated Top-1 scores with old/new separated
+                        ALL: {topk_all:.4f}
+                        Old: {topk_old:.4f}
+                        New: {topk_new:.4f}
+
+                    Cheated MCA scores with old/new separated
+                        ALL: {mca_all:.4f}
+                        Old: {mca_old:.4f}
+                        New: {mca_new:.4f}
+                ''')
+                eval_results['gcd_v2_cheated'] = topk_all
+                eval_results['gcd_v2_cheated_old'] = topk_old
+                eval_results['gcd_v2_cheated_new'] = topk_new
+                eval_results['gcd_v2_cheated_balanced'] = mca_all
+                eval_results['gcd_v2_cheated_balanced_old'] = mca_old
+                eval_results['gcd_v2_cheated_balanced_new'] = mca_new
+                print_log(log_msg, logger=logger)
+                continue 
 
         return eval_results
 

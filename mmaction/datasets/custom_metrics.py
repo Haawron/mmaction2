@@ -2,7 +2,7 @@ import numpy as np
 from scipy.optimize import linear_sum_assignment as linear_assignment
 
 
-def split_cluster_acc_v2(y_true, y_pred, mask, return_conf=False):
+def split_cluster_acc_v2(y_true, y_pred, mask, return_conf=False, return_indmap=False):
     """
     Calculate clustering accuracy. Require scikit-learn installed
     First compute linear assignment on all data, then look at how good the accuracy is on subsets
@@ -27,7 +27,7 @@ def split_cluster_acc_v2(y_true, y_pred, mask, return_conf=False):
     ind = linear_assignment(w.max() - w)
     ind = np.vstack(ind).T
 
-    ind_map = {j: i for i, j in ind}
+    ind_map = {j: i for i, j in ind}  # gt -> pred
     total_acc = sum([w[i, j] for i, j in ind]) * 1.0 / y_pred.size
 
     old_acc = 0
@@ -45,12 +45,15 @@ def split_cluster_acc_v2(y_true, y_pred, mask, return_conf=False):
     if total_new_instances != 0:  # if there is at least one new instances
         new_acc /= total_new_instances
 
+    result = [total_acc, old_acc, new_acc]
     if return_conf:
         # confmat `w` in this function: row-pred, col-gt
         # confmat to be: row-gt, col-pred
-        return total_acc, old_acc, new_acc, np.take_along_axis(w, ind[:,-1][None,:], axis=1).T
-    else:
-        return total_acc, old_acc, new_acc
+        ind_reverse = np.argsort(ind[:,-1])
+        result += [w[ind_reverse].T]
+    if return_indmap:
+        result += [ind[:,-1]]
+    return result
 
 
 def split_cluster_acc_v2_balanced(y_true, y_pred, mask):
@@ -107,7 +110,7 @@ if __name__ == '__main__':
     BOLD = '\033[1m'
     GREEN = '\033[92m'
     PURPLE = '\033[95m'
-    
+
     def pprint_conf(conf, num_old_classes):
         with np.printoptions(threshold=np.inf, linewidth=np.inf):
             s = str(conf)

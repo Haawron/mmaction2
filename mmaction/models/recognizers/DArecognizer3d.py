@@ -25,7 +25,7 @@ class DARecognizer3D(DARecognizer2D):
 
         x = self.extract_feat(imgs)
         if self.with_neck:
-            x, loss_aux = self.neck(x, labels.squeeze())
+            x, loss_aux = self.neck(x, labels.squeeze(), domains)
             losses.update(loss_aux)
 
         cls_score = self.cls_head(x, domains)
