@@ -49,7 +49,7 @@ df = pd.DataFrame.from_records(records)
 
 if latex_view or only_best_children:
     df['parent_jid'] = df['jid'].map(lambda jid: jid.split('_')[0])
-    df = df.sort_values(['gcd_v2'], ascending=False).groupby('parent_jid').head(1)
+    df = df.sort_values(['gcd_v2_balanced'], ascending=False).groupby('parent_jid').head(1)
     del df['parent_jid']
 
 # todo: LateX setting이면 group by model 해서 best 뽑고
@@ -77,7 +77,10 @@ if latex_view:
             print(df_)
 
 else:
-    sort_by_metrics = ['gcd_v2', 'gcd_v2_old', 'gcd_v2_new', 'gcd_v2_balanced', 'gcd_v2_balanced_old', 'gcd_v2_balanced_new']
+    sort_by_metrics = [
+        'gcd_v2_balanced', 'gcd_v2_balanced_old', 'gcd_v2_balanced_new',
+        'gcd_v2', 'gcd_v2_old', 'gcd_v2_new',
+    ]
     df = df.set_index(['task', 'subtask', 'model', 'add_on', 'extra_setting'])
     df = df.sort_values(
         by=list(map(lambda s: f'{s}_order', sort_bys)) + sort_by_metrics + ['jid'],
@@ -87,9 +90,9 @@ else:
         del df[f'{sort_by}_order']
 
     cols = [
+        'gcd_v2_balanced', 'gcd_v2_balanced_old', 'gcd_v2_balanced_new',
         'gcd_v2', 'gcd_v2_old', 'gcd_v2_new',
         'kmeans', 'kmeans_old', 'kmeans_new',
-        'gcd_v2_balanced', 'gcd_v2_balanced_old', 'gcd_v2_balanced_new',
         'jid'
     ]
     df = df[cols]

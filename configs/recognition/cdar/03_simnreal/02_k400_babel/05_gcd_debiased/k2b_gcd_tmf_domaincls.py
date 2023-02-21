@@ -1,5 +1,5 @@
 _base_ = [
-    './_base_/k2b_gcd_data.py',
+    './_base_/k2b_gcd_tmf_data.py',
     '../_base_/k2b_training.py',
     # '../../_base_/gcd_model.py',
     '../../../../../_base_/default_runtime.py',
@@ -32,7 +32,7 @@ model = dict(
         in_channels=768,
         loss_weight=.5,
         num_layers=4,
-        dropout_ratio=0.,
+        dropout_ratio=0,
     ),
     cls_head=dict(
         type='DINODAHead',
