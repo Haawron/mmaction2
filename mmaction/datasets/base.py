@@ -318,17 +318,26 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
                     pred = pred[self.cumsum[0]:]
                     old_mask = old_mask[self.cumsum[0]:]
                     total_acc, old_acc, new_acc, conf = split_cluster_acc_v2(gt_labels[self.cumsum[0]:], pred, old_mask, return_conf=True)
+                    total_acc_balanced, old_acc_balanced, new_acc_balanced = split_cluster_acc_v2_balanced(gt_labels[self.cumsum[0]:], pred, old_mask)
                 else:
                     total_acc, old_acc, new_acc, conf = split_cluster_acc_v2(gt_labels, pred, old_mask, return_conf=True)
+                    total_acc_balanced, old_acc_balanced, new_acc_balanced = split_cluster_acc_v2_balanced(gt_labels, pred, old_mask)
                 log_msg = '\n' + inspect.cleandoc(f'''
                     K-Means:
                         ALL: {total_acc:.4f}
                         Old: {old_acc:.4f}
                         New: {new_acc:.4f}
+                    K-Means (Balanced):
+                        ALL: {total_acc_balanced:.4f}
+                        Old: {old_acc_balanced:.4f}
+                        New: {new_acc_balanced:.4f}
                 ''')
-                eval_results[metric] = total_acc
-                eval_results[metric+'_old'] = old_acc
-                eval_results[metric+'_new'] = new_acc
+                eval_results['kmeans'] = total_acc
+                eval_results['kmeans_old'] = old_acc
+                eval_results['kmeans_new'] = new_acc
+                eval_results['kmeans_balanced'] = total_acc_balanced
+                eval_results['kmeans_balanced_old'] = old_acc_balanced
+                eval_results['kmeans_balanced_new'] = new_acc_balanced
 
                 # confmat
                 h, w = conf.shape
