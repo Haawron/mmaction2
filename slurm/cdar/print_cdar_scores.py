@@ -1,5 +1,6 @@
 from pathlib import Path
 import re
+import argparse
 
 import pandas as pd
 
@@ -7,6 +8,26 @@ import pandas as pd
 only_best_children = True
 latex_view = False
 
+dispmap = {
+    'gcd_v2': 'ALL',
+    'gcd_v2_old': 'Old',
+    'gcd_v2_new': 'New',
+    'gcd_v2_balanced': 'ALL(B)',
+    'gcd_v2_balanced_old': 'Old(B)',
+    'gcd_v2_balanced_new': 'New(B)',
+    'kmeans_balanced': 'ALL(kmeans,B)',
+    'kmeans_balanced_old': 'Old(kmeans,B)',
+    'kmeans_balanced_new': 'New(kmeans,B)',
+    'kmeans': 'ALL(kmeans)',
+    'kmeans_old': 'Old(kmeans)',
+    'kmeans_new': 'New(kmeans)',
+}
+
+
+parser = argparse.ArgumentParser('')
+parser.add_argument('-p', '--show-path', action='store_true')
+parser.add_argument('-k', '--show-kmeans', action='store_true')
+args = parser.parse_args()
 
 orders = {
     'task': {},
@@ -44,6 +65,8 @@ for p_pkl in p.rglob('best_pred.pkl'):
         **settings, **found,
         'jid': jobname.split('__')[0] + f'_{job_array_idx}'
     }
+    if args.show_path:
+        record['path'] = p_log.parent
     records.append(record)
 df = pd.DataFrame.from_records(records)
 
@@ -91,10 +114,17 @@ else:
 
     cols = [
         'gcd_v2_balanced', 'gcd_v2_balanced_old', 'gcd_v2_balanced_new',
-        'gcd_v2', 'gcd_v2_old', 'gcd_v2_new',
-        'kmeans', 'kmeans_old', 'kmeans_new',
-        'jid'
-    ]
+        'gcd_v2', 'gcd_v2_old', 'gcd_v2_new']
+    if args.show_kmeans:
+        cols += [
+            'kmeans_balanced', 'kmeans_balanced_old', 'kmeans_balanced_new',
+            'kmeans', 'kmeans_old', 'kmeans_new',
+        ]
+    if args.show_path:
+        cols += ['path']
+    else:
+        cols += ['jid']
     df = df[cols]
-    with pd.option_context('display.precision', 1):
+    df = df.rename(columns=dispmap)
+    with pd.option_context('display.precision', 1, 'max_colwidth', None):
         print(df)
