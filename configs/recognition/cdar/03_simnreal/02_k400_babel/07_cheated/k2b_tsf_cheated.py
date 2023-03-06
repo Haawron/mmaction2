@@ -13,10 +13,10 @@ evaluation = dict(
     metrics=['gcd_v2_cheated', 'confusion_matrix', 'gcd_v2', 'kmeans'],  # valid, test 공용으로 사용, 아 이러면 마지막 metric의 confmat만 보여주네
     metric_options={'num_old_classes': 12, 'num_all_classes': 20},
     rule='greater',
-    save_best='kmeans')
+    save_best='gcd_v2_cheated_balanced')
 
 # optimizer
-lr=1e-2
+lr=1e-3
 optimizer = dict(
     type='SGD',
     lr=lr,

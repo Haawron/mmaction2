@@ -1,5 +1,8 @@
+from collections.abc import Iterable
+
 import torch
 from torch import nn
+import numpy as np
 
 from ..builder import RECOGNIZERS
 from .recognizer2d import DARecognizer2D
@@ -7,14 +10,14 @@ from .recognizer2d import DARecognizer2D
 
 @RECOGNIZERS.register_module()
 class DARecognizer3D(DARecognizer2D):
-    def forward_train(self, imgs, labels, domains, **kwargs):
+    def forward_train(self, imgs, labels, domains:np.ndarray, **kwargs):
         """Defines the computation performed at every call when training."""
 
         assert self.with_cls_head
         if self.contrastive:
-            imgs = imgs.reshape((-1, ) + imgs.shape[-4:])  # [2N, 2, 1, C, T, H, W] -> [4N, C, T, H, W]
-            labels = labels.reshape(-1)  # [2N, 2] -> [4N]
-            domains = domains.reshape(-1)
+            imgs = imgs.reshape((-1, ) + imgs.shape[-4:])  # [2B, 2, 1, C, T, H, W] -> [4B, C, T, H, W]
+            labels = labels.reshape(-1)  # [2B, 2, 1] -> [4B]
+            domains = np.tile(domains, (2, 1)).T.reshape(-1)  # [2B] -> [2, 2B] -> [2B, 2] -> [4B]
         else:
             # COP: [2B, N, C, T, H, W]
             if imgs.dim() > 5:
@@ -25,8 +28,12 @@ class DARecognizer3D(DARecognizer2D):
 
         x = self.extract_feat(imgs)
         if self.with_neck:
-            x, loss_aux = self.neck(x, labels.squeeze(), domains)
-            losses.update(loss_aux)
+            vertebrae = self.neck
+            if not isinstance(vertebrae, Iterable):
+                vertebrae = [vertebrae]
+            for vertebra in vertebrae:
+                x, loss_aux = vertebra(x, labels.squeeze(), domains=domains, **kwargs)
+                losses.update(loss_aux)
 
         cls_score = self.cls_head(x, domains)
         gt_labels = labels.squeeze()
@@ -68,7 +75,11 @@ class DARecognizer3D(DARecognizer2D):
         else:
             feat = self.extract_feat(imgs)
             if self.with_neck:
-                feat, _ = self.neck(feat)
+                vertebrae = self.neck
+                if not isinstance(vertebrae, Iterable):
+                    vertebrae = [vertebrae]
+                for vertebra in vertebrae:
+                    feat, _ = vertebra(feat, None, domains=domains)
 
         if self.feature_extraction:
             feat_dim = len(feat[0].size()) if isinstance(feat, tuple) else len(

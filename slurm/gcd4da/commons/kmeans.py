@@ -328,9 +328,9 @@ class SSKMeansTrainer:
     def _get_gcd_scores(self, pred, gt, num_known_classes) -> List[float]:
         old_mask = (gt < num_known_classes)
         scores = []
-        total_acc, old_acc, new_acc = split_cluster_acc_v2(gt, pred, old_mask)
-        scores.extend([total_acc, old_acc, new_acc])
         total_acc, old_acc, new_acc = split_cluster_acc_v2_balanced(gt, pred, old_mask)
+        scores.extend([total_acc, old_acc, new_acc])
+        total_acc, old_acc, new_acc = split_cluster_acc_v2(gt, pred, old_mask)
         scores.extend([total_acc, old_acc, new_acc])
         return scores
 

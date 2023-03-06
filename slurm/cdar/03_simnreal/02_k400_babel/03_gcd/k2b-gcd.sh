@@ -40,4 +40,5 @@ OMP_NUM_THREADS=${N} MKL_NUM_THREADS=${N} torchrun --nproc_per_node="${N}" --mas
     --cfg-options optimizer.lr="$lr" model.backbone.pretrained="$ckpt" log_config.interval=100 \
     --validate --test-last --test-best
 
+source /data/hyogun/send_slack_message_mmaction.sh
 exit 0
