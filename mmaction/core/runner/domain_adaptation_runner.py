@@ -20,7 +20,7 @@ def cycle(iterable):
 
 
 class DomainAdaptationRunner(EpochBasedRunner):
-    
+
     def run_iter(self, data_batches, domains, train_mode, **kwargs):
         if self.batch_processor is not None:
             # not actually used
@@ -42,7 +42,7 @@ class DomainAdaptationRunner(EpochBasedRunner):
             self.log_buffer.update(log_vars, outputs['num_samples'])
 
         self.outputs = outputs
-    
+
     def train(self, data_loaders, **kwargs):
         """
         Different from OmniSourceRunner's
@@ -68,6 +68,8 @@ class DomainAdaptationRunner(EpochBasedRunner):
             self._inner_iter = i
             self.call_hook('before_train_iter')
             kwargs['iter'] = self._iter
+            kwargs['epoch'] = self._epoch  # for edl loss
+            kwargs['total_epoch'] = self._max_epochs  # for edl loss
             self.run_iter(data_batches, self.domains, train_mode=True, **kwargs)
             self.call_hook('after_train_iter')
             self._iter += 1

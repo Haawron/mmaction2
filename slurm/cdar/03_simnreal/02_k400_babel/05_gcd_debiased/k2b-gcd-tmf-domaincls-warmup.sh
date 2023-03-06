@@ -31,7 +31,7 @@ lrs=(1e-2 1e-3 5e-4 1e-4)
 lr="${lrs[SLURM_ARRAY_TASK_ID]}"
 
 ckpt='work_dirs/train_output/cdar/03_simnreal/02_k400_babel/02_timesformer/warmup/in1k/27900__k2b-tsf-warmup-in1k/0/20230129-105851/best_kmeans_epoch_40.pth'
-config='configs/recognition/cdar/03_simnreal/02_k400_babel/05_gcd_debiased/k2b_gcd_tmf.py'
+config='configs/recognition/cdar/03_simnreal/02_k400_babel/05_gcd_debiased/k2b_gcd_tmf_domaincls.py'
 
 N=$SLURM_GPUS_ON_NODE
 OMP_NUM_THREADS=${N} MKL_NUM_THREADS=${N} torchrun --nproc_per_node="${N}" --master_port=$((10000+RANDOM%20000)) tools/train.py $config \
@@ -40,4 +40,5 @@ OMP_NUM_THREADS=${N} MKL_NUM_THREADS=${N} torchrun --nproc_per_node="${N}" --mas
     --cfg-options optimizer.lr="$lr" load_from="$ckpt" log_config.interval=100 \
     --validate --test-last --test-best
 
+source /data/hyogun/send_slack_message_mmaction.sh
 exit 0

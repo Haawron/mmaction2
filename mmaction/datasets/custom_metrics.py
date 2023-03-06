@@ -27,7 +27,7 @@ def split_cluster_acc_v2(y_true, y_pred, mask, return_conf=False, return_indmap=
     ind = linear_assignment(w.max() - w)
     ind = np.vstack(ind).T
 
-    ind_map = {j: i for i, j in ind}  # gt -> pred
+    ind_map = {j: i for i, j in ind}  # pred -> gt
     total_acc = sum([w[i, j] for i, j in ind]) * 1.0 / y_pred.size
 
     old_acc = 0

@@ -58,8 +58,8 @@ for task_name, domains in domain_infos.items():
         feat_domain1 = np.array(np.load(p_pkl_domain1, allow_pickle=True))
         feat_domain2 = np.array(np.load(p_pkl_domain2, allow_pickle=True))
 
-        p_ann_domain1 = p_filelists_dir / f'{dataset_name1 + ("/processed" if task_name == "simnreal" else "")}/filelist_{domain_name1}_train_open_all.txt'
-        p_ann_domain2 = p_filelists_dir / f'{dataset_name2 + ("/processed" if task_name == "simnreal" else "")}/filelist_{domain_name2}_train_open_all.txt'
+        p_ann_domain1 = p_filelists_dir / f'{dataset_name1 + ("/processed" if task_name != "hello" else "")}/filelist_{domain_name1}_train_open_all.txt'
+        p_ann_domain2 = p_filelists_dir / f'{dataset_name2 + ("/processed" if task_name != "hello" else "")}/filelist_{domain_name2}_train_open_all.txt'
 
         with p_ann_domain1.open() as f1, p_ann_domain2.open() as f2:
             ann_domain1 = np.array([int(line[-1]) for line in csv.reader(f1, delimiter=' ')])

@@ -39,9 +39,9 @@ declare -A configs=(
 declare -A annfiles=(
     ['ucf']='data/_filelists/ucf101/filelist_ucf_train_open.txt'
     ['hmdb']='data/_filelists/hmdb51/filelist_hmdb_train_open.txt'
-    ['P02']='data/_filelists/ek100/filelist_P02_train_open.txt'
-    ['P04']='data/_filelists/ek100/filelist_P04_train_open.txt'
-    ['P22']='data/_filelists/ek100/filelist_P22_train_open.txt'
+    ['P02']='data/_filelists/ek100/processed/filelist_P02_train_open_all.txt'
+    ['P04']='data/_filelists/ek100/processed/filelist_P04_train_open_all.txt'
+    ['P22']='data/_filelists/ek100/processed/filelist_P22_train_open_all.txt'
     ['k400']='data/_filelists/k400/processed/filelist_k400_train_open.txt'
     ['babel']='data/_filelists/babel/processed/filelist_babel_train_open.txt'
 )

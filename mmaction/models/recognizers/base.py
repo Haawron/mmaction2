@@ -2,6 +2,7 @@
 import warnings
 from abc import ABCMeta, abstractmethod
 from collections import OrderedDict
+from collections.abc import Iterable
 
 import torch
 import torch.distributed as dist
@@ -76,7 +77,12 @@ class BaseRecognizer(nn.Module, metaclass=ABCMeta):
             self.backbone = builder.build_backbone(backbone)
 
         if neck is not None:
-            self.neck = builder.build_neck(neck)
+            if isinstance(neck, Iterable):
+                # modulelist helps torch to detect modules inside the built-in python list
+                # so that model.cuda() recursively
+                self.neck = nn.ModuleList([builder.build_neck(vertebra) for vertebra in neck])
+            else:
+                self.neck = builder.build_neck(neck)
 
         self.cls_head = builder.build_head(cls_head) if cls_head else None
 
@@ -138,7 +144,11 @@ class BaseRecognizer(nn.Module, metaclass=ABCMeta):
         if self.with_cls_head:
             self.cls_head.init_weights()
         if self.with_neck:
-            self.neck.init_weights()
+            if isinstance(self.neck, Iterable):
+                for vertebra in self.neck:
+                    vertebra.init_weights()
+            else:
+                self.neck.init_weights()
 
     @auto_fp16()
     def extract_feat(self, imgs):

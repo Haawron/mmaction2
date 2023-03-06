@@ -34,7 +34,7 @@ class DomainClassifier(nn.Module):
         for layer in self.fc_domain:
             normal_init(layer, std=self.init_std)
 
-    def forward(self, f, labels=None, domains=None):
+    def forward(self, f, labels=None, domains=None, **kwargs):
         if domains is None:  # if valid or test
             return f, None
         if f.shape[0] == 2*domains.shape[0]:  # if contrastive

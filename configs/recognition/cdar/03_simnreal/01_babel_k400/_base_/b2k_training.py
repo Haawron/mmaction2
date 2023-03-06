@@ -3,7 +3,7 @@ evaluation = dict(
     metrics=['kmeans', 'gcd_v2'],
     metric_options={'num_old_classes': 12, 'num_all_classes': 27},
     rule='greater',
-    save_best='kmeans')
+    save_best='kmeans_balanced')
 
 # optimizer
 lr=1e-2
@@ -24,5 +24,5 @@ optimizer_config = dict(grad_clip=dict(max_norm=40, norm_type=2))
 # learning policy
 lr_config = dict(policy='CosineAnnealing', min_lr=lr*1e-3)
 total_epochs = 50
-work_dir = './work_dirs/train_output/hello/'
+work_dir = './work_dirs/train_output/hello/cdar'
 load_from = None
