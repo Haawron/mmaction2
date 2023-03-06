@@ -11,6 +11,7 @@
 To understand the world, we humans constantly need to relate the present to the past, and put events in context. In this paper, we enable existing video models to do the same. We propose a long-term feature bank---supportive information extracted over the entire span of a video---to augment state-of-the-art video models that otherwise would only view short clips of 2-5 seconds. Our experiments demonstrate that augmenting 3D convolutional networks with a long-term feature bank yields state-of-the-art results on three challenging video datasets: AVA, EPIC-Kitchens, and Charades.
 
 <!-- [IMAGE] -->
+
 <div align=center>
 <img src="https://user-images.githubusercontent.com/34324155/143016220-21d90fb3-fd9f-499c-820f-f6c421bda7aa.png" width="800"/>
 </div>
@@ -19,11 +20,11 @@ To understand the world, we humans constantly need to relate the present to the 
 
 ### AVA2.1
 
-| Model | Modality |  Pretrained  | Backbone  | Input | gpus |   Resolution   | mAP  | log | json | ckpt |
-| :----------------------------------------------------------: | :------: | :----------: | :-------: | :---: | :--: | :------------: | :--: | :----------------------------------------------------------: | :----------------------------------------------------------: | :----------------------------------------------------------: |
-| [lfb_nl_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb.py](/configs/detection/lfb/lfb_nl_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb.py) |   RGB    | Kinetics-400 | [slowonly_r50_4x16x1](/configs/detection/ava/slowonly_kinetics_pretrained_r50_4x16x1_20e_ava_rgb.py) | 4x16 | 8 | short-side 256 | 24.11 | [log](https://download.openmmlab.com/mmaction/detection/lfb/lfb_nl_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb/20210224_125052.log) | [json](https://download.openmmlab.com/mmaction/detection/lfb/lfb_nl_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb/20210224_125052.log.json) | [ckpt](https://download.openmmlab.com/mmaction/detection/lfb/lfb_nl_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb/lfb_nl_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb_20210224-2ae136d9.pth) |
-| [lfb_avg_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb.py](/configs/detection/lfb/lfb_avg_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb.py) |   RGB    | Kinetics-400 | [slowonly_r50_4x16x1](/configs/detection/ava/slowonly_kinetics_pretrained_r50_4x16x1_20e_ava_rgb.py) | 4x16 | 8 | short-side 256 | 20.17 | [log](https://download.openmmlab.com/mmaction/detection/lfb/lfb_avg_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb/20210301_124812.log) | [json](https://download.openmmlab.com/mmaction/detection/lfb/lfb_avg_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb/20210301_124812.log.json) | [ckpt](https://download.openmmlab.com/mmaction/detection/lfb/lfb_avg_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb/lfb_avg_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb_20210301-19c330b7.pth) |
-| [lfb_max_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb.py](/configs/detection/lfb/lfb_max_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb.py) |   RGB    | Kinetics-400 | [slowonly_r50_4x16x1](/configs/detection/ava/slowonly_kinetics_pretrained_r50_4x16x1_20e_ava_rgb.py) | 4x16 | 8 | short-side 256 | 22.15 | [log](https://download.openmmlab.com/mmaction/detection/lfb/lfb_max_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb/20210301_124812.log) | [json](https://download.openmmlab.com/mmaction/detection/lfb/lfb_max_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb/20210301_124812.log.json) | [ckpt](https://download.openmmlab.com/mmaction/detection/lfb/lfb_max_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb/lfb_max_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb_20210301-37efcd15.pth) |
+|                                                                          Model                                                                          | Modality |  Pretrained  |                                               Backbone                                               | Input | gpus |   Resolution   |  mAP  |                                                                     log                                                                      |                                                                        json                                                                        |                                                                                                    ckpt                                                                                                     |
+| :-----------------------------------------------------------------------------------------------------------------------------------------------------: | :------: | :----------: | :--------------------------------------------------------------------------------------------------: | :---: | :--: | :------------: | :---: | :------------------------------------------------------------------------------------------------------------------------------------------: | :------------------------------------------------------------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+|  [lfb_nl_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb.py](/configs/detection/lfb/lfb_nl_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb.py)  |   RGB    | Kinetics-400 | [slowonly_r50_4x16x1](/configs/detection/ava/slowonly_kinetics_pretrained_r50_4x16x1_20e_ava_rgb.py) | 4x16  |  8   | short-side 256 | 24.11 | [log](https://download.openmmlab.com/mmaction/detection/lfb/lfb_nl_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb/20210224_125052.log)  | [json](https://download.openmmlab.com/mmaction/detection/lfb/lfb_nl_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb/20210224_125052.log.json)  |  [ckpt](https://download.openmmlab.com/mmaction/detection/lfb/lfb_nl_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb/lfb_nl_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb_20210224-2ae136d9.pth)  |
+| [lfb_avg_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb.py](/configs/detection/lfb/lfb_avg_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb.py) |   RGB    | Kinetics-400 | [slowonly_r50_4x16x1](/configs/detection/ava/slowonly_kinetics_pretrained_r50_4x16x1_20e_ava_rgb.py) | 4x16  |  8   | short-side 256 | 20.17 | [log](https://download.openmmlab.com/mmaction/detection/lfb/lfb_avg_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb/20210301_124812.log) | [json](https://download.openmmlab.com/mmaction/detection/lfb/lfb_avg_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb/20210301_124812.log.json) | [ckpt](https://download.openmmlab.com/mmaction/detection/lfb/lfb_avg_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb/lfb_avg_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb_20210301-19c330b7.pth) |
+| [lfb_max_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb.py](/configs/detection/lfb/lfb_max_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb.py) |   RGB    | Kinetics-400 | [slowonly_r50_4x16x1](/configs/detection/ava/slowonly_kinetics_pretrained_r50_4x16x1_20e_ava_rgb.py) | 4x16  |  8   | short-side 256 | 22.15 | [log](https://download.openmmlab.com/mmaction/detection/lfb/lfb_max_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb/20210301_124812.log) | [json](https://download.openmmlab.com/mmaction/detection/lfb/lfb_max_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb/20210301_124812.log.json) | [ckpt](https://download.openmmlab.com/mmaction/detection/lfb/lfb_max_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb/lfb_max_kinetics_pretrained_slowonly_r50_4x16x1_20e_ava_rgb_20210301-37efcd15.pth) |
 
 :::{note}
 
@@ -34,6 +35,9 @@ To understand the world, we humans constantly need to relate the present to the 
 3. Because the long-term features are randomly sampled in testing, the test accuracy may have some differences.
 4. Before train or test lfb, you need to infer feature bank with the [lfb_slowonly_r50_ava_infer.py](/configs/detection/lfb/lfb_slowonly_r50_ava_infer.py). For more details on infer feature bank, you can refer to [Train](#Train) part.
 5. You can also dowonload long-term feature bank from [AVA_train_val_float32_lfb](https://download.openmmlab.com/mmaction/detection/lfb/AVA_train_val_float32_lfb.rar) or [AVA_train_val_float16_lfb](https://download.openmmlab.com/mmaction/detection/lfb/AVA_train_val_float16_lfb.rar), and then put them on `lfb_prefix_path`.
+6. The ROIHead now supports single-label classification (i.e. the network outputs at most
+   one-label per actor). This can be done by (a) setting multilabel=False during training and
+   the test_cfg.rcnn.action_thr for testing.
 
 :::
 
@@ -76,7 +80,7 @@ python tools/train.py configs/detection/lfb/lfb_nl_kinetics_pretrained_slowonly_
   --validate --seed 0 --deterministic
 ```
 
-For more details and optional arguments infos, you can refer to **Training setting** part in [getting_started](/docs/getting_started.md#training-setting).
+For more details and optional arguments infos, you can refer to **Training setting** part in [getting_started](/docs/en/getting_started.md#training-setting).
 
 ## Test
 
@@ -101,7 +105,7 @@ python tools/test.py configs/detection/lfb/lfb_nl_kinetics_pretrained_slowonly_r
     checkpoints/SOME_CHECKPOINT.pth --eval mAP --out results.csv
 ```
 
-For more details, you can refer to **Test a dataset** part in [getting_started](/docs/getting_started.md#test-a-dataset).
+For more details, you can refer to **Test a dataset** part in [getting_started](/docs/en/getting_started.md#test-a-dataset).
 
 ## Citation
 

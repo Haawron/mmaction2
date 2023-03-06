@@ -7,7 +7,6 @@ import time
 import numpy as np
 import torch
 import torch.distributed as dist
-from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
 from mmcv.runner import (DistSamplerSeedHook, EpochBasedRunner, OptimizerHook,
                          build_optimizer, get_dist_info)
 from mmcv.runner.hooks import Fp16OptimizerHook
@@ -16,11 +15,12 @@ from ..core import (DistEvalHook, EvalHook, OmniSourceDistSamplerSeedHook,
                     OmniSourceRunner, DomainAdaptationDistSamplerSeedHook,
                     DomainAdaptationRunner)
 from ..datasets import build_dataloader, build_dataset
-from ..utils import PreciseBNHook, get_root_logger
+from ..utils import (PreciseBNHook, build_ddp, build_dp, default_device,
+                     get_root_logger)
 from .test import multi_gpu_test
 
 
-def init_random_seed(seed=None, device='cuda', distributed=True):
+def init_random_seed(seed=None, device=default_device, distributed=True):
     """Initialize random seed.
 
     If the seed is not set, the seed will be automatically randomized,
@@ -123,13 +123,17 @@ def train_model(model,
         find_unused_parameters = cfg.get('find_unused_parameters', False)
         # Sets the `find_unused_parameters` parameter in
         # torch.nn.parallel.DistributedDataParallel
-        model = MMDistributedDataParallel(
-            model.cuda(),
-            device_ids=[torch.cuda.current_device()],
-            broadcast_buffers=False,
-            find_unused_parameters=find_unused_parameters)
+
+        model = build_ddp(
+            model,
+            default_device,
+            default_args=dict(
+                device_ids=[int(os.environ['LOCAL_RANK'])],
+                broadcast_buffers=False,
+                find_unused_parameters=find_unused_parameters))
     else:
-        model = MMDataParallel(model, device_ids=cfg.gpu_ids)
+        model = build_dp(
+            model, default_device, default_args=dict(device_ids=cfg.gpu_ids))
 
     # build runner
     optimizer = build_optimizer(model, cfg.optimizer)
@@ -159,9 +163,14 @@ def train_model(model,
         optimizer_config = cfg.optimizer_config
 
     # register hooks
-    runner.register_training_hooks(cfg.lr_config, optimizer_config,
-                                   cfg.checkpoint_config, cfg.log_config,
-                                   cfg.get('momentum_config', None))
+    runner.register_training_hooks(
+        cfg.lr_config,
+        optimizer_config,
+        cfg.checkpoint_config,
+        cfg.log_config,
+        cfg.get('momentum_config', None),
+        custom_hooks_config=cfg.get('custom_hooks', None))
+    
     if distributed:
         if cfg.omnisource:
             runner.register_hook(OmniSourceDistSamplerSeedHook())
@@ -169,6 +178,21 @@ def train_model(model,
             runner.register_hook(DomainAdaptationDistSamplerSeedHook())
         else:
             runner.register_hook(DistSamplerSeedHook())
+
+    # multigrid setting
+    multigrid_cfg = cfg.get('multigrid', None)
+    if multigrid_cfg is not None:
+        from mmaction.utils.multigrid import LongShortCycleHook
+        multigrid_scheduler = LongShortCycleHook(cfg)
+        runner.register_hook(multigrid_scheduler)
+        logger.info('Finish register multigrid hook')
+
+        # subbn3d aggregation is HIGH, as it should be done before
+        # saving and evaluation
+        from mmaction.utils.multigrid import SubBatchNorm3dAggregationHook
+        subbn3d_aggre_hook = SubBatchNorm3dAggregationHook()
+        runner.register_hook(subbn3d_aggre_hook, priority='VERY_HIGH')
+        logger.info('Finish register subbn3daggre hook')
 
     # precise bn setting
     if cfg.get('precise_bn', False):
@@ -184,7 +208,14 @@ def train_model(model,
                                                   **dataloader_setting)
         precise_bn_hook = PreciseBNHook(data_loader_precise_bn,
                                         **cfg.get('precise_bn'))
-        runner.register_hook(precise_bn_hook)
+        runner.register_hook(precise_bn_hook, priority='HIGHEST')
+        logger.info('Finish register precisebn hook')
+
+    if distributed:
+        if cfg.omnisource:
+            runner.register_hook(OmniSourceDistSamplerSeedHook())
+        else:
+            runner.register_hook(DistSamplerSeedHook())
 
     if validate:
         eval_cfg = cfg.get('evaluation', {})
@@ -202,7 +233,7 @@ def train_model(model,
         val_dataloader = build_dataloader(val_dataset, **dataloader_setting)
         eval_hook = DistEvalHook(val_dataloader, **eval_cfg) if distributed \
             else EvalHook(val_dataloader, **eval_cfg)
-        runner.register_hook(eval_hook)
+        runner.register_hook(eval_hook, priority='LOW')
 
     if cfg.resume_from:
         runner.resume(cfg.resume_from)

@@ -66,6 +66,12 @@ jobs:
         run: sudo apt-get install -y libturbojpeg
       - name: Install PyTorch
         run: pip install torch==${{matrix.torch}}+cpu torchvision==${{matrix.torchvision}}+cpu -f https://download.pytorch.org/whl/torch_stable.html
+      - name: Install timm
+        run: python -m pip install timm==0.6.7
+        if: ${{matrix.torch == '1.5.0'}}
+      - name: Install timm
+        run: python -m pip install timm
+        if: ${{matrix.torch != '1.5.0'}}
       - name: Install MMCV
         run: pip install mmcv-full -f https://download.openmmlab.com/mmcv/dist/cpu/torch${{matrix.torch}}/index.html
       - name: Install MMDet
@@ -111,6 +117,10 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Upgrade pip
         run: pip install pip --upgrade
+      - name: Fetch GPG keys
+        run: |
+          apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/3bf863cc.pub
+          apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/machine-learning/repos/ubuntu1804/x86_64/7fa2af80.pub
       - name: Install CUDA
         run: |
           apt-get update && apt-get install -y ffmpeg libsm6 libxext6 git ninja-build libglib2.0-0 libturbojpeg libsndfile1 libsm6 libxrender-dev libxext6 python${{matrix.python-version}}-dev
@@ -126,7 +136,7 @@ jobs:
         run: |
           python -V
           python -m pip install mmcv-full -f https://download.openmmlab.com/mmcv/dist/cu101/${{matrix.torch_version}}/index.html
-          python -m pip install -q git+https://github.com/open-mmlab/mmdetection/
+          CFLAGS=`python -c 'import sysconfig;print("-I"+sysconfig.get_paths()["include"])'`  python -m pip install -q git+https://github.com/open-mmlab/mmdetection/
           python -m pip install -q git+https://github.com/open-mmlab/mmclassification/
           python -m pip install -r requirements.txt
           python -c 'import mmcv; print(mmcv.__version__)'
@@ -134,7 +144,7 @@ jobs:
         run: rm -rf .eggs && pip install -e .
       - name: Run unittests and generate coverage report
         run: |
-          coverage run --branch --source mmaction -m pytest tests/
+          coverage run --branch --source mmaction -m pytest tests/ -k 'not timm'
           coverage xml
           coverage report -m
       # Only upload coverage report for python3.7 && pytorch1.5
@@ -169,6 +179,10 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Upgrade pip
         run: pip install pip --upgrade
+      - name: Fetch GPG keys
+        run: |
+          apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/3bf863cc.pub
+          apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/machine-learning/repos/ubuntu1804/x86_64/7fa2af80.pub
       - name: Install CUDA
         run: |
           apt-get update && apt-get install -y ffmpeg libsm6 libxext6 git ninja-build libglib2.0-0 libturbojpeg libsndfile1 libsm6 libxrender-dev libxext6 python${{matrix.python-version}}-dev
@@ -180,11 +194,13 @@ jobs:
         run: python -m pip install lmdb
       - name: Install PyTorch
         run: python -m pip install torch==${{matrix.torch}} torchvision==${{matrix.torchvision}} -f https://download.pytorch.org/whl/torch_stable.html
+      - name: Install timm
+        run: python -m pip install timm
       - name: Install mmaction dependencies
         run: |
           python -V
           python -m pip install mmcv-full -f https://download.openmmlab.com/mmcv/dist/cu102/${{matrix.torch_version}}/index.html
-          python -m pip install -q git+https://github.com/open-mmlab/mmdetection/
+          CFLAGS=`python -c 'import sysconfig;print("-I"+sysconfig.get_paths()["include"])'`  python -m pip install -q git+https://github.com/open-mmlab/mmdetection/
           python -m pip install -q git+https://github.com/open-mmlab/mmclassification/
           python -m pip install -r requirements.txt
           python -c 'import mmcv; print(mmcv.__version__)'
@@ -213,7 +229,7 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - name: Upgrade pip
-        run: pip install pip --upgrade --user
+        run: python -m pip install pip --upgrade --user
       - name: Install librosa and soundfile
         run: python -m pip install librosa soundfile
       - name: Install lmdb
@@ -221,6 +237,8 @@ jobs:
       - name: Install PyTorch
         # As a complement to Linux CI, we test on PyTorch LTS version
         run: pip install torch==1.8.2+${{ matrix.platform }} torchvision==0.9.2+${{ matrix.platform }} -f https://download.pytorch.org/whl/lts/1.8/torch_lts.html
+      - name: Install timm
+        run: python -m pip install timm
       - name: Install MMCV
         run: pip install mmcv-full -f https://download.openmmlab.com/mmcv/dist/cpu/torch1.8/index.html --only-binary mmcv-full
       - name: Install mmaction dependencies

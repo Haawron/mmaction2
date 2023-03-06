@@ -1,3 +1,4 @@
+# Copyright (c) OpenMMLab. All rights reserved.
 log_level = 'INFO'
 load_from = None
 resume_from = None
@@ -128,6 +129,7 @@ train_pipeline = [
 
 val_pipeline = [
     dict(type='LoadImageFromFile'),
+    dict(type='TopDownGetBboxCenterScale', padding=1.25),
     dict(type='TopDownAffine'),
     dict(type='ToTensor'),
     dict(

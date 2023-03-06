@@ -103,8 +103,8 @@ class SampleFrames:
         test_mode (bool): Store True when building test or validation dataset.
             Default: False.
         start_index (None): This argument is deprecated and moved to dataset
-            class (``BaseDataset``, ``VideoDatset``, ``RawframeDataset``, etc),
-            see this: https://github.com/open-mmlab/mmaction2/pull/89.
+            class (``BaseDataset``, ``VideoDataset``, ``RawframeDataset``,
+            etc), see this: https://github.com/open-mmlab/mmaction2/pull/89.
         keep_tail_frames (bool): Whether to keep tail frames when sampling.
             Default: False.
     """
@@ -157,9 +157,9 @@ class SampleFrames:
             if num_frames > ori_clip_len - 1:
                 base_offsets = np.arange(self.num_clips) * avg_interval
                 clip_offsets = (base_offsets + np.random.uniform(
-                    0, avg_interval, self.num_clips)).astype(np.int)
+                    0, avg_interval, self.num_clips)).astype(np.int64)
             else:
-                clip_offsets = np.zeros((self.num_clips, ), dtype=np.int)
+                clip_offsets = np.zeros((self.num_clips, ), dtype=np.int64)
         else:
             avg_interval = (num_frames - ori_clip_len + 1) // self.num_clips
 
@@ -175,7 +175,7 @@ class SampleFrames:
                 ratio = (num_frames - ori_clip_len + 1.0) / self.num_clips
                 clip_offsets = np.around(np.arange(self.num_clips) * ratio)
             else:
-                clip_offsets = np.zeros((self.num_clips, ), dtype=np.int)
+                clip_offsets = np.zeros((self.num_clips, ), dtype=np.int64)
 
         return clip_offsets
 
@@ -197,11 +197,11 @@ class SampleFrames:
         avg_interval = (num_frames - ori_clip_len + 1) / float(self.num_clips)
         if num_frames > ori_clip_len - 1:
             base_offsets = np.arange(self.num_clips) * avg_interval
-            clip_offsets = (base_offsets + avg_interval / 2.0).astype(np.int)
+            clip_offsets = (base_offsets + avg_interval / 2.0).astype(np.int64)
             if self.twice_sample:
                 clip_offsets = np.concatenate([clip_offsets, base_offsets])
         else:
-            clip_offsets = np.zeros((self.num_clips, ), dtype=np.int)
+            clip_offsets = np.zeros((self.num_clips, ), dtype=np.int64)
         return clip_offsets
 
     def _sample_clips(self, num_frames):
@@ -253,7 +253,7 @@ class SampleFrames:
 
         start_index = results['start_index']
         frame_inds = np.concatenate(frame_inds) + start_index
-        results['frame_inds'] = frame_inds.astype(np.int)
+        results['frame_inds'] = frame_inds.astype(np.int64)
         results['clip_len'] = self.clip_len
         results['frame_interval'] = self.frame_interval
         results['num_clips'] = self.num_clips
@@ -331,8 +331,8 @@ class UntrimmedSampleFrames:
         frame_interval (int): Temporal interval of adjacent sampled frames.
             Default: 16.
         start_index (None): This argument is deprecated and moved to dataset
-            class (``BaseDataset``, ``VideoDatset``, ``RawframeDataset``, etc),
-            see this: https://github.com/open-mmlab/mmaction2/pull/89.
+            class (``BaseDataset``, ``VideoDataset``, ``RawframeDataset``,
+            etc), see this: https://github.com/open-mmlab/mmaction2/pull/89.
     """
 
     def __init__(self, clip_len=1, frame_interval=16, start_index=None):
@@ -365,7 +365,7 @@ class UntrimmedSampleFrames:
         frame_inds = np.clip(frame_inds, 0, total_frames - 1)
 
         frame_inds = np.concatenate(frame_inds) + start_index
-        results['frame_inds'] = frame_inds.astype(np.int)
+        results['frame_inds'] = frame_inds.astype(np.int64)
         results['clip_len'] = self.clip_len
         results['frame_interval'] = self.frame_interval
         results['num_clips'] = num_clips
@@ -500,7 +500,7 @@ class SampleAVAFrames(SampleFrames):
         frame_inds = self._get_clips(center_index, skip_offsets, shot_info)
         start_index = results.get('start_index', 0)
 
-        frame_inds = np.array(frame_inds, dtype=np.int) + start_index
+        frame_inds = np.array(frame_inds, dtype=np.int64) + start_index
         results['frame_inds'] = frame_inds
         results['clip_len'] = self.clip_len
         results['frame_interval'] = self.frame_interval
@@ -589,7 +589,7 @@ class SampleProposalFrames(SampleFrames):
             offsets = base_offsets + np.random.randint(
                 avg_interval, size=num_segments)
         else:
-            offsets = np.zeros((num_segments, ), dtype=np.int)
+            offsets = np.zeros((num_segments, ), dtype=np.int64)
 
         return offsets
 
@@ -612,9 +612,9 @@ class SampleProposalFrames(SampleFrames):
         if valid_length >= num_segments:
             avg_interval = valid_length / float(num_segments)
             base_offsets = np.arange(num_segments) * avg_interval
-            offsets = (base_offsets + avg_interval / 2.0).astype(np.int)
+            offsets = (base_offsets + avg_interval / 2.0).astype(np.int64)
         else:
-            offsets = np.zeros((num_segments, ), dtype=np.int)
+            offsets = np.zeros((num_segments, ), dtype=np.int64)
 
         return offsets
 
@@ -705,7 +705,7 @@ class SampleProposalFrames(SampleFrames):
         """
         ori_clip_len = self.clip_len * self.frame_interval
         return np.arange(
-            0, num_frames - ori_clip_len, self.test_interval, dtype=np.int)
+            0, num_frames - ori_clip_len, self.test_interval, dtype=np.int64)
 
     def _sample_clips(self, num_frames, proposals):
         """Choose clip offsets for the video in a given mode.
@@ -749,7 +749,7 @@ class SampleProposalFrames(SampleFrames):
         start_index = results['start_index']
         frame_inds = np.mod(frame_inds, total_frames) + start_index
 
-        results['frame_inds'] = np.array(frame_inds).astype(np.int)
+        results['frame_inds'] = np.array(frame_inds).astype(np.int64)
         results['clip_len'] = self.clip_len
         results['frame_interval'] = self.frame_interval
         results['num_clips'] = (

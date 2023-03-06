@@ -19,11 +19,11 @@
 
 ### Kinetics-400
 
-|配置文件 | 分辨率 | GPU 数量 | 主干网络 | 预训练 | top1 准确率 | top5 准确率 | 推理时间 (video/s) | GPU 显存占用 (M)| ckpt | log| json|
-|:--|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
-|[timesformer_divST_8x32x1_15e_kinetics400_rgb](/configs/recognition/timesformer/timesformer_divST_8x32x1_15e_kinetics400_rgb.py) | 短边 320 | 8 | TimeSformer | ImageNet-21K | 77.92 | 93.29 | x | 17874 | [ckpt](https://download.openmmlab.com/mmaction/recognition/timesformer/timesformer_divST_8x32x1_15e_kinetics400_rgb/timesformer_divST_8x32x1_15e_kinetics400_rgb-3f8e5d03.pth) | [log](https://download.openmmlab.com/mmaction/recognition/timesformer/timesformer_divST_8x32x1_15e_kinetics400_rgb/timesformer_divST_8x32x1_15e_kinetics400_rgb.log)| [json](https://download.openmmlab.com/mmaction/recognition/timesformer/timesformer_divST_8x32x1_15e_kinetics400_rgb/timesformer_divST_8x32x1_15e_kinetics400_rgb.json)|
-|[timesformer_jointST_8x32x1_15e_kinetics400_rgb](/configs/recognition/timesformer/timesformer_jointST_8x32x1_15e_kinetics400_rgb.py) | 短边 320 | 8 | TimeSformer | ImageNet-21K | 77.01 | 93.08 | x | 25658 | [ckpt](https://download.openmmlab.com/mmaction/recognition/timesformer/timesformer_jointST_8x32x1_15e_kinetics400_rgb/timesformer_jointST_8x32x1_15e_kinetics400_rgb-0d6e3984.pth) | [log](https://download.openmmlab.com/mmaction/recognition/timesformer/timesformer_jointST_8x32x1_15e_kinetics400_rgb/timesformer_jointST_8x32x1_15e_kinetics400_rgb.log)| [json](https://download.openmmlab.com/mmaction/recognition/timesformer/timesformer_jointST_8x32x1_15e_kinetics400_rgb/timesformer_jointST_8x32x1_15e_kinetics400_rgb.json)|
-|[timesformer_sapceOnly_8x32x1_15e_kinetics400_rgb](/configs/recognition/timesformer/timesformer_sapceOnly_8x32x1_15e_kinetics400_rgb.py) | 短边 320 | 8 | TimeSformer | ImageNet-21K | 76.93 | 92.90 | x | 12750 | [ckpt](https://download.openmmlab.com/mmaction/recognition/timesformer/timesformer_spaceOnly_8x32x1_15e_kinetics400_rgb/timesformer_spaceOnly_8x32x1_15e_kinetics400_rgb-0cf829cd.pth) | [log](https://download.openmmlab.com/mmaction/recognition/timesformer/timesformer_spaceOnly_8x32x1_15e_kinetics400_rgb/timesformer_spaceOnly_8x32x1_15e_kinetics400_rgb.log)| [json](https://download.openmmlab.com/mmaction/recognition/timesformer/timesformer_spaceOnly_8x32x1_15e_kinetics400_rgb/timesformer_spaceOnly_8x32x1_15e_kinetics400_rgb.json)|
+| 配置文件                                                                                                                                 |  分辨率  | GPU 数量 |  主干网络   |    预训练    | top1 准确率 | top5 准确率 | 推理时间 (video/s) | GPU 显存占用 (M) |                                                                                          ckpt                                                                                          |                                                                                     log                                                                                      |                                                                                      json                                                                                      |
+| :--------------------------------------------------------------------------------------------------------------------------------------- | :------: | :------: | :---------: | :----------: | :---------: | :---------: | :----------------: | :--------------: | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+| [timesformer_divST_8x32x1_15e_kinetics400_rgb](/configs/recognition/timesformer/timesformer_divST_8x32x1_15e_kinetics400_rgb.py)         | 短边 320 |    8     | TimeSformer | ImageNet-21K |    77.92    |    93.29    |         x          |      17874       |     [ckpt](https://download.openmmlab.com/mmaction/recognition/timesformer/timesformer_divST_8x32x1_15e_kinetics400_rgb/timesformer_divST_8x32x1_15e_kinetics400_rgb-3f8e5d03.pth)     |     [log](https://download.openmmlab.com/mmaction/recognition/timesformer/timesformer_divST_8x32x1_15e_kinetics400_rgb/timesformer_divST_8x32x1_15e_kinetics400_rgb.log)     |     [json](https://download.openmmlab.com/mmaction/recognition/timesformer/timesformer_divST_8x32x1_15e_kinetics400_rgb/timesformer_divST_8x32x1_15e_kinetics400_rgb.json)     |
+| [timesformer_jointST_8x32x1_15e_kinetics400_rgb](/configs/recognition/timesformer/timesformer_jointST_8x32x1_15e_kinetics400_rgb.py)     | 短边 320 |    8     | TimeSformer | ImageNet-21K |    77.01    |    93.08    |         x          |      25658       |   [ckpt](https://download.openmmlab.com/mmaction/recognition/timesformer/timesformer_jointST_8x32x1_15e_kinetics400_rgb/timesformer_jointST_8x32x1_15e_kinetics400_rgb-0d6e3984.pth)   |   [log](https://download.openmmlab.com/mmaction/recognition/timesformer/timesformer_jointST_8x32x1_15e_kinetics400_rgb/timesformer_jointST_8x32x1_15e_kinetics400_rgb.log)   |   [json](https://download.openmmlab.com/mmaction/recognition/timesformer/timesformer_jointST_8x32x1_15e_kinetics400_rgb/timesformer_jointST_8x32x1_15e_kinetics400_rgb.json)   |
+| [timesformer_sapceOnly_8x32x1_15e_kinetics400_rgb](/configs/recognition/timesformer/timesformer_sapceOnly_8x32x1_15e_kinetics400_rgb.py) | 短边 320 |    8     | TimeSformer | ImageNet-21K |    76.93    |    92.90    |         x          |      12750       | [ckpt](https://download.openmmlab.com/mmaction/recognition/timesformer/timesformer_spaceOnly_8x32x1_15e_kinetics400_rgb/timesformer_spaceOnly_8x32x1_15e_kinetics400_rgb-0cf829cd.pth) | [log](https://download.openmmlab.com/mmaction/recognition/timesformer/timesformer_spaceOnly_8x32x1_15e_kinetics400_rgb/timesformer_spaceOnly_8x32x1_15e_kinetics400_rgb.log) | [json](https://download.openmmlab.com/mmaction/recognition/timesformer/timesformer_spaceOnly_8x32x1_15e_kinetics400_rgb/timesformer_spaceOnly_8x32x1_15e_kinetics400_rgb.json) |
 
 注：
 
@@ -33,7 +33,7 @@
 2. MMAction2 保持与 [原代码](https://github.com/facebookresearch/TimeSformer) 的测试设置一致（three crop x 1 clip）。
 3. TimeSformer 使用的预训练模型 `vit_base_patch16_224.pth` 转换自 [vision_transformer](https://github.com/google-research/vision_transformer)。
 
-对于数据集准备的细节，用户可参考 [数据集准备文档](/docs_zh_CN/data_preparation.md) 中的 Kinetics400 部分。
+对于数据集准备的细节，用户可参考 [数据集准备文档](/docs/zh_cn/data_preparation.md) 中的 Kinetics400 部分。
 
 ## 如何训练
 
@@ -51,7 +51,7 @@ python tools/train.py configs/recognition/timesformer/timesformer_divST_8x32x1_1
     --validate --seed 0 --deterministic
 ```
 
-更多训练细节，可参考 [基础教程](/docs_zh_CN/getting_started.md#训练配置) 中的 **训练配置** 部分。
+更多训练细节，可参考 [基础教程](/docs/zh_cn/getting_started.md#训练配置) 中的 **训练配置** 部分。
 
 ## 如何测试
 
@@ -69,4 +69,4 @@ python tools/test.py configs/recognition/timesformer/timesformer_divST_8x32x1_15
     --out result.json
 ```
 
-更多测试细节，可参考 [基础教程](/docs_zh_CN/getting_started.md#测试某个数据集) 中的 **测试某个数据集** 部分。
+更多测试细节，可参考 [基础教程](/docs/zh_cn/getting_started.md#测试某个数据集) 中的 **测试某个数据集** 部分。

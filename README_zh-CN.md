@@ -17,19 +17,6 @@
     </sup>
   </div>
 
-  [📘文档](https://mmaction2.readthedocs.io/en/latest/) |
-  [🛠️安装指南](https://mmaction2.readthedocs.io/en/latest/install.html) |
-  [👀模型库](https://mmaction2.readthedocs.io/en/latest/modelzoo.html) |
-  [🆕更新](https://mmaction2.readthedocs.io/en/latest/changelog.html) |
-  [🚀进行中项目](https://github.com/open-mmlab/mmaction2/projects) |
-  [🤔问题反馈](https://github.com/open-mmlab/mmaction2/issues/new/choose)
-
-</div>
-
-## 简介
-
-[English](/README.md) | 简体中文
-
 [![Documentation](https://readthedocs.org/projects/mmaction2/badge/?version=latest)](https://mmaction2.readthedocs.io/zh_CN/latest/)
 [![actions](https://github.com/open-mmlab/mmaction2/workflows/build/badge.svg)](https://github.com/open-mmlab/mmaction2/actions)
 [![codecov](https://codecov.io/gh/open-mmlab/mmaction2/branch/master/graph/badge.svg)](https://codecov.io/gh/open-mmlab/mmaction2)
@@ -38,9 +25,22 @@
 [![Average time to resolve an issue](https://isitmaintained.com/badge/resolution/open-mmlab/mmaction2.svg)](https://github.com/open-mmlab/mmaction2/issues)
 [![Percentage of issues still open](https://isitmaintained.com/badge/open/open-mmlab/mmaction2.svg)](https://github.com/open-mmlab/mmaction2/issues)
 
-MMAction2 是一款基于 PyTorch 的视频理解开源工具箱，是 [OpenMMLab](http://openmmlab.org/) 项目的成员之一
+[📘文档](https://mmaction2.readthedocs.io/zh_CN/latest/) |
+[🛠️安装指南](https://mmaction2.readthedocs.io/zh_CN/latest/install.html) |
+[👀模型库](https://mmaction2.readthedocs.io/zh_CN/latest/modelzoo.html) |
+[🆕更新](https://mmaction2.readthedocs.io/en/latest/changelog.html) |
+[🚀进行中项目](https://github.com/open-mmlab/mmaction2/projects) |
+[🤔问题反馈](https://github.com/open-mmlab/mmaction2/issues/new/choose)
 
-主分支代码目前支持 **PyTorch 1.3 以上**的版本
+</div>
+
+[English](/README.md) | 简体中文
+
+## 简介
+
+MMAction2 是一款基于 PyTorch 的视频理解开源工具箱，是 [OpenMMLab](https://openmmlab.com/) 项目的成员之一
+
+主分支代码目前支持 **PyTorch 1.5 以上**的版本
 
 <div align="center">
   <div style="float:left;margin-right:10px;">
@@ -51,6 +51,10 @@ MMAction2 是一款基于 PyTorch 的视频理解开源工具箱，是 [OpenMMLa
   <img src="https://user-images.githubusercontent.com/34324155/123989146-2ecae680-d9fb-11eb-916b-b9db5563a9e5.gif" width="380px"><br>
     <p style="font-size:1.5vw;">NTURGB+D-120 上的基于人体姿态的动作识别</p>
   </div>
+</div>
+<div align="center">
+  <img src="https://user-images.githubusercontent.com/30782254/155710881-bb26863e-fcb4-458e-b0c4-33cd79f96901.gif" width="580px"/><br>
+    <p style="font-size:1.5vw;">Kinetics-400 上的基于 skeleton 的时空动作检测和动作识别</p>
 </div>
 <div align="center">
   <img src="https://github.com/open-mmlab/mmaction2/raw/master/resources/spatio-temporal-det.gif" width="800px"/><br>
@@ -67,6 +71,19 @@ MMAction2 是一款基于 PyTorch 的视频理解开源工具箱，是 [OpenMMLa
 
 ## 更新记录
 
+### 🌟 1.x 预览版本
+
+全新的 **MMAction2 v1.0.0rc0** 版本已经在 2022.09.01 发布：
+
+- 基于 [MMEngine](https://github.com/open-mmlab/mmengine) 统一了各组件接口。
+- 全面支持混合精度，训练测试速度更快。
+- 更加灵活的[架构](https://mmaction2.readthedocs.io/en/1.x)。
+
+欢迎在 [1.x branch](https://github.com/open-mmlab/mmaction2/tree/1.x) 发现更多的新特性。欢迎 issue 和 PR。
+
+### 💎 稳定版本
+
+- (2022-03-04) 在 K400 上支持 **Multigrid** 训练，达到 76.07% 的识别准确率并加快了训练速度。
 - (2021-11-24) 在 NTU60 XSub 上支持 **2s-AGCN**， 在 joint stream 和 bone stream 上分别达到 86.06% 和 86.89% 的识别准确率。
 - (2021-10-29) 支持基于 skeleton 模态和 rgb 模态的时空动作检测和行为识别 demo (demo/demo_video_structuralize.py)。
 - (2021-10-26) 在 NTU60 3d 关键点标注数据集上训练测试 **STGCN**, 可达到 84.61% (高于 [paper](https://www.aaai.org/ocs/index.php/AAAI/AAAI18/paper/viewPaper/17135) 中的 81.5%) 的识别准确率。
@@ -74,23 +91,36 @@ MMAction2 是一款基于 PyTorch 的视频理解开源工具箱，是 [OpenMMLa
 - (2021-10-25) 提供使用自定义数据集训练 PoseC3D 的 [教程](https://github.com/open-mmlab/mmaction2/blob/master/configs/skeleton/posec3d/custom_dataset_training.md)，此 PR 由用户 [bit-scientist](https://github.com/bit-scientist) 完成！
 - (2021-10-16) 在 UCF101, HMDB51 上支持 **PoseC3D**，仅用 2D 关键点就可分别达到 87.0% 和 69.3% 的识别准确率。两数据集的预提取骨架特征可以公开下载。
 
-v0.21.0 版本已于 2021 年 12 月 31 日发布，可通过查阅 [更新日志](/docs/changelog.md) 了解更多细节以及发布历史
+v0.24.0 版本已于 2022 年 5 月 5 日发布，可通过查阅[更新日志](/docs/en/changelog.md) 了解更多细节以及发布历史
 
 ## 安装
 
-请参考 [安装指南](/docs_zh_CN/install.md) 进行安装
+MMAction2 依赖 [PyTorch](https://pytorch.org/), [MMCV](https://github.com/open-mmlab/mmcv), [MMDetection](https://github.com/open-mmlab/mmdetection)(可选), [MMPose](https://github.com/open-mmlab/mmpose)(可选)，以下是安装的简要步骤。
+更详细的安装指南请参考 [install.md](docs/zh_cn/install.md)。
+
+```shell
+conda create -n open-mmlab python=3.8 pytorch=1.10 cudatoolkit=11.3 torchvision -c pytorch -y
+conda activate open-mmlab
+pip3 install openmim
+mim install mmcv-full
+mim install mmdet  # 可选
+mim install mmpose  # 可选
+git clone https://github.com/open-mmlab/mmaction2.git
+cd mmaction2
+pip3 install -e .
+```
 
 ## 教程
 
-请参考 [基础教程](/docs_zh_CN/getting_started.md) 了解 MMAction2 的基本使用。MMAction2也提供了其他更详细的教程:
+请参考 [基础教程](/docs/zh_cn/getting_started.md) 了解 MMAction2 的基本使用。MMAction2也提供了其他更详细的教程:
 
-- [如何编写配置文件](/docs_zh_CN/tutorials/1_config.md)
-- [如何微调模型](/docs_zh_CN/tutorials/2_finetune.md)
-- [如何增加新数据集](/docs_zh_CN/tutorials/3_new_dataset.md)
-- [如何设计数据处理流程](/docs_zh_CN/tutorials/4_data_pipeline.md)
-- [如何增加新模块](/docs_zh_CN/tutorials/5_new_modules.md)
-- [如何导出模型为 onnx 格式](/docs_zh_CN/tutorials/6_export_model.md)
-- [如何自定义模型运行参数](/docs_zh_CN/tutorials/7_customize_runtime.md)
+- [如何编写配置文件](/docs/zh_cn/tutorials/1_config.md)
+- [如何微调模型](/docs/zh_cn/tutorials/2_finetune.md)
+- [如何增加新数据集](/docs/zh_cn/tutorials/3_new_dataset.md)
+- [如何设计数据处理流程](/docs/zh_cn/tutorials/4_data_pipeline.md)
+- [如何增加新模块](/docs/zh_cn/tutorials/5_new_modules.md)
+- [如何导出模型为 onnx 格式](/docs/zh_cn/tutorials/6_export_model.md)
+- [如何自定义模型运行参数](/docs/zh_cn/tutorials/7_customize_runtime.md)
 
 MMAction2 也提供了相应的中文 Colab 教程，可以点击 [这里](https://colab.research.google.com/github/open-mmlab/mmaction2/blob/master/demo/mmaction2_tutorial_zh-CN.ipynb) 进行体验！
 
@@ -180,7 +210,7 @@ MMAction2 将跟进学界的最新进展，并支持更多算法和框架。如�
     <td><a href="https://github.com/open-mmlab/mmaction2/blob/master/tools/data/sthv1/README_zh-CN.md">SthV1</a> (<a href="https://20bn.com/datasets/something-something/v1/">主页</a>) (ICCV'2017)</td>
     <td><a href="https://github.com/open-mmlab/mmaction2/blob/master/tools/data/sthv2/README_zh-CN.md">SthV2</a> (<a href="https://20bn.com/datasets/something-something/">主页</a>) (ICCV'2017)</td>
     <td><a href="https://github.com/open-mmlab/mmaction2/blob/master/tools/data/diving48/README_zh-CN.md">Diving48</a> (<a href="http://www.svcl.ucsd.edu/projects/resound/dataset.html">主页</a>) (ECCV'2018)</td>
-    <td><a href="https://github.com/open-mmlab/mmaction2/blob/master/tools/data/jester/README_zh-CN.md">Jester</a> (<a href="https://20bn.com/datasets/jester/v1">主页</a>) (ICCV'2019)</td>
+    <td><a href="https://github.com/open-mmlab/mmaction2/blob/master/tools/data/jester/README_zh-CN.md">Jester</a> (<a href="https://developer.qualcomm.com/software/ai-datasets/jester">主页</a>) (ICCV'2019)</td>
   </tr>
   <tr>
     <td><a href="https://github.com/open-mmlab/mmaction2/blob/master/tools/data/mit/README_zh-CN.md">Moments in Time</a> (<a href="http://moments.csail.mit.edu/">主页</a>) (TPAMI'2019)</td>
@@ -227,29 +257,34 @@ MMAction2 将跟进学界的最新进展，并支持更多算法和框架。如�
 
 ## 基准测试
 
-为了验证 MMAction2 框架的高精度和高效率，开发成员将其与当前其他主流框架进行速度对比。更多详情可见 [基准测试](/docs_zh_CN/benchmark.md)
+为了验证 MMAction2 框架的高精度和高效率，开发成员将其与当前其他主流框架进行速度对比。更多详情可见 [基准测试](/docs/zh_cn/benchmark.md)
 
 ## 数据集准备
 
-请参考 [数据准备](/docs_zh_CN/data_preparation.md) 了解数据集准备概况。所有支持的数据集都列于 [数据集清单](/docs_zh_CN/supported_datasets.md) 中
+请参考 [数据准备](/docs/zh_cn/data_preparation.md) 了解数据集准备概况。所有支持的数据集都列于 [数据集清单](/docs/zh_cn/supported_datasets.md) 中
 
 ## 常见问题
 
-请参考 [FAQ](/docs_zh_CN/faq.md) 了解其他用户的常见问题
+请参考 [FAQ](/docs/zh_cn/faq.md) 了解其他用户的常见问题
 
 ## 相关工作
 
 目前有许多研究工作或工程项目基于 MMAction2 搭建，例如：
 
-- Evidential Deep Learning for Open Set Action Recognition, ICCV 2021 **Oral**. [[论文]](https://arxiv.org/abs/2107.10161)[[代码]](https://github.com/Cogito2012/DEAR)
-- Rethinking Self-supervised Correspondence Learning: A Video Frame-level Similarity Perspective, ICCV 2021 **Oral**. [[论文]](https://arxiv.org/abs/2103.17263)[[代码]](https://github.com/xvjiarui/VFS)
-- Video Swin Transformer. [[论文]](https://arxiv.org/abs/2106.13230)[[代码]](https://github.com/SwinTransformer/Video-Swin-Transformer)
+- Evidential Deep Learning for Open Set Action Recognition, ICCV 2021 **Oral**. [\[论文\]](https://arxiv.org/abs/2107.10161)[\[代码\]](https://github.com/Cogito2012/DEAR)
+- Rethinking Self-supervised Correspondence Learning: A Video Frame-level Similarity Perspective, ICCV 2021 **Oral**. [\[论文\]](https://arxiv.org/abs/2103.17263)[\[代码\]](https://github.com/xvjiarui/VFS)
+- Video Swin Transformer. [\[论文\]](https://arxiv.org/abs/2106.13230)[\[代码\]](https://github.com/SwinTransformer/Video-Swin-Transformer)
 
 更多详情可见 [相关工作](docs/projects.md)
 
-## 许可
+## 参与贡献
 
-该项目开源自 [Apache 2.0 license](/LICENSE)
+我们非常欢迎用户对于 MMAction2 做出的任何贡献，可以参考 [贡献指南](/.github/CONTRIBUTING.md) 文件了解更多细节
+
+## 致谢
+
+MMAction2 是一款由不同学校和公司共同贡献的开源项目。我们感谢所有为项目提供算法复现和新功能支持的贡献者，以及提供宝贵反馈的用户。
+我们希望该工具箱和基准测试可以为社区提供灵活的代码工具，供用户复现现有算法并开发自己的新模型，从而不断为开源社区提供贡献。
 
 ## 引用
 
@@ -264,42 +299,38 @@ MMAction2 将跟进学界的最新进展，并支持更多算法和框架。如�
 }
 ```
 
-## 参与贡献
+## 许可
 
-我们非常欢迎用户对于 MMAction2 做出的任何贡献，可以参考 [贡献指南](/.github/CONTRIBUTING.md) 文件了解更多细节
-
-## 致谢
-
-MMAction2 是一款由不同学校和公司共同贡献的开源项目。我们感谢所有为项目提供算法复现和新功能支持的贡献者，以及提供宝贵反馈的用户。
-我们希望该工具箱和基准测试可以为社区提供灵活的代码工具，供用户复现现有算法并开发自己的新模型，从而不断为开源社区提供贡献。
+该项目开源自 [Apache 2.0 license](/LICENSE)
 
 ## OpenMMLab 的其他项目
 
-- [MMCV](https://github.com/open-mmlab/mmcv): OpenMMLab 计算机视觉基础库
 - [MIM](https://github.com/open-mmlab/mim): MIM 是 OpenMMlab 项目、算法、模型的统一入口
-- [MMAction2](https://github.com/open-mmlab/mmaction2): OpenMMLab 新一代视频理解工具箱与测试基准
-- [MMClassification](https://github.com/open-mmlab/mmclassification): OpenMMLab 图像分类工具箱与测试基准
-- [MMDeploy](https://github.com/open-mmlab/mmdeploy): OpenMMLab 模型部署框架
-- [MMDetection](https://github.com/open-mmlab/mmdetection): OpenMMLab 检测工具箱与测试基准
-- [MMDetection3D](https://github.com/open-mmlab/mmdetection3d): OpenMMLab 新一代通用3D目标检测平台
-- [MMEditing](https://github.com/open-mmlab/mmediting): OpenMMLab 图像视频编辑工具箱
-- [MMFewShot](https://github.com/open-mmlab/mmfewshot): OpenMMLab 少样本学习代码库
-- [MMFlow](https://github.com/open-mmlab/mmflow): OpenMMLab 光流估计工具箱
-- [MMGeneration](https://github.com/open-mmlab/mmgeneration): OpenMMLab 图片视频生成模型工具箱
-- [MMHuman3D](https://github.com/open-mmlab/mmhuman3d): OpenMMLab 人体姿态和形状估计工具箱
-- [MMOCR](https://github.com/open-mmlab/mmocr): OpenMMLab 全流程文字检测识别理解工具包
-- [MMPose](https://github.com/open-mmlab/mmpose): OpenMMLab 姿态估计工具箱与测试基准
-- [MMRazor](https://github.com/open-mmlab/mmrazor): OpenMMLab 模型压缩工具箱与测试基准
-- [MMSegmentation](https://github.com/open-mmlab/mmsegmentation): OpenMMLab 语义分割工具箱与测试基准
+- [MMClassification](https://github.com/open-mmlab/mmclassification): OpenMMLab 图像分类工具箱
+- [MMDetection](https://github.com/open-mmlab/mmdetection): OpenMMLab 目标检测工具箱
+- [MMDetection3D](https://github.com/open-mmlab/mmdetection3d): OpenMMLab 新一代通用 3D 目标检测平台
+- [MMYOLO](https://github.com/open-mmlab/mmyolo): OpenMMLab YOLO 系列工具箱和基准测试
+- [MMRotate](https://github.com/open-mmlab/mmrotate): OpenMMLab 旋转框检测工具箱与测试基准
+- [MMSegmentation](https://github.com/open-mmlab/mmsegmentation): OpenMMLab 语义分割工具箱
+- [MMOCR](https://github.com/open-mmlab/mmocr): OpenMMLab 全流程文字检测识别理解工具箱
+- [MMPose](https://github.com/open-mmlab/mmpose): OpenMMLab 姿态估计工具箱
+- [MMHuman3D](https://github.com/open-mmlab/mmhuman3d): OpenMMLab 人体参数化模型工具箱与测试基准
 - [MMSelfSup](https://github.com/open-mmlab/mmselfsup): OpenMMLab 自监督学习工具箱与测试基准
+- [MMRazor](https://github.com/open-mmlab/mmrazor): OpenMMLab 模型压缩工具箱与测试基准
+- [MMFewShot](https://github.com/open-mmlab/mmfewshot): OpenMMLab 少样本学习工具箱与测试基准
+- [MMAction2](https://github.com/open-mmlab/mmaction2): OpenMMLab 新一代视频理解工具箱
 - [MMTracking](https://github.com/open-mmlab/mmtracking): OpenMMLab 一体化视频目标感知平台
+- [MMFlow](https://github.com/open-mmlab/mmflow): OpenMMLab 光流估计工具箱与测试基准
+- [MMEditing](https://github.com/open-mmlab/mmediting): OpenMMLab 图像视频编辑工具箱
+- [MMGeneration](https://github.com/open-mmlab/mmgeneration): OpenMMLab 图片视频生成模型工具箱
+- [MMDeploy](https://github.com/open-mmlab/mmdeploy): OpenMMLab 模型部署框架
 
 ## 欢迎加入 OpenMMLab 社区
 
 扫描下方的二维码可关注 OpenMMLab 团队的 [知乎官方账号](https://www.zhihu.com/people/openmmlab)，加入 OpenMMLab 团队的 [官方交流 QQ 群](https://jq.qq.com/?_wv=1027&k=aCvMxdr3)
 
 <div align="center">
-<img src="https://github.com/open-mmlab/mmaction2/raw/master/resources/zhihu_qrcode.jpg" height="400" />  <img src="https://github.com/open-mmlab/mmaction2/raw/master/resources/qq_group_qrcode.jpg" height="400" />
+<img src="https://github.com/open-mmlab/mmaction2/raw/master/resources/zhihu_qrcode.jpg" height="400" />  <img src="https://github.com/open-mmlab/mmaction2/raw/master/resources/qq_group_qrcode.png" height="400" />
 </div>
 
 我们会在 OpenMMLab 社区为大家
