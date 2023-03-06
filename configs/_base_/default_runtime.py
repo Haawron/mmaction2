@@ -1,4 +1,4 @@
-checkpoint_config = None#dict(interval=10)
+checkpoint_config = dict(interval=10)
 log_config = dict(
     interval=10,
     hooks=[

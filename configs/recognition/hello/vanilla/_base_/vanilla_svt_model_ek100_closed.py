@@ -18,11 +18,12 @@ model = dict(
         transformer_layers=None,
         attention_type='divided_space_time',
         norm_cfg=dict(type='LN', eps=1e-6)),
-    cls_head=dict(
-        type='DINOHead',
-        in_channels=768,
-        num_classes=num_classes,
-        print_mca=False),
+    cls_head=dict(type='TimeSformerHead', num_classes=num_classes, in_channels=768),
+    # cls_head=dict(
+    #     type='DINOHead',
+    #     in_channels=768,
+    #     num_classes=num_classes,
+    #     print_mca=False),
     # model training and testing settings
     train_cfg=None,
     test_cfg=dict(average_clips='prob')) 

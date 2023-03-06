@@ -133,7 +133,7 @@ work_dirs/
 mmaction/configs/*
 mmaction/tools/*
 
-*.ipynb
+# *.ipynb
 
 # unignore ipython notebook files in demo
 !demo/*.ipynb
@@ -142,9 +142,12 @@ mmaction/.mim
 
 ################################################################
 logs/
-slurm/hello.*
 tmp/
 failure_modes_visualized/
 visualizations/
 *.tar
-hello.py
+**/hello*
+**/*.mp4
+# mmaction tmp files
+**/*0000*
+tools/data/kinetics/kinetics400/failed

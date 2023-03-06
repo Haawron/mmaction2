@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd
 import csv
 import argparse
-import re
 import os, subprocess
 from typing import List, Dict, Tuple, Union
 from multiprocessing import Pool
@@ -15,14 +14,19 @@ else:
     from .semi_kmeans import KMeans as SemiKMeans
 from slurm.utils.commons.patterns import get_full_infodict_from_jid
 from mmaction.core import confusion_matrix
+from mmaction.datasets.custom_metrics import split_cluster_acc_v2, split_cluster_acc_v2_balanced
 
 
 SPLIT_NAMES = ['train_source', 'train_target', 'valid', 'test']
 
 METRIC_H, METRIC_OS, METRIC_OS_STAR, METRIC_UNK = 'H', 'OS', 'OS*', 'UNK'
 METRIC_ALL, METRIC_OLD, METRIC_NEW = 'ALL', 'Old', 'New'
+METRIC_ALL_BALANCED, METRIC_OLD_BALANCED, METRIC_NEW_BALANCED = 'ALL(B)', 'Old(B)', 'New(B)'
 VOSUDA_METRIC_NAMES = [METRIC_H, METRIC_OS, METRIC_OS_STAR, METRIC_UNK]
-CDAR_METRIC_NAMES = [METRIC_ALL, METRIC_OLD, METRIC_NEW]
+CDAR_METRIC_NAMES = [
+    METRIC_ALL, METRIC_OLD, METRIC_NEW,
+    METRIC_ALL_BALANCED, METRIC_OLD_BALANCED, METRIC_NEW_BALANCED
+]
 
 DOMAINNAME2DATASETNAME = {
     'ucf': 'ucf101',
@@ -85,12 +89,12 @@ def extract_features_unless_yet(jid:str):
 
 class SSKMeansTrainer:
     def __init__(self,
-        p_features:Path,
-
         # required options: experiment settings
-        source:str, target:str,
+        source:Union[str,None]=None, target:Union[str,None]=None,
+
+        p_features:Path=None,
         num_known_classes:int=12,
-        project_name:str='vosuda',  # vosuda, cdar
+        project_name:str='cdar',  # vosuda, cdar
 
         # hyper-params
         ks:Union[int, List[int]]=22,
@@ -102,6 +106,7 @@ class SSKMeansTrainer:
         seed_of_seeds:int=5236,
         n_tries:int=20,
         verbose=False,
+        autoinit=True,
         **kwargs
     ):
         self.p_features = p_features
@@ -111,7 +116,7 @@ class SSKMeansTrainer:
 
         self.n_cpus = int(os.environ.get('SLURM_CPUS_ON_NODE', 8))
 
-        self.ks = [ks] if isinstance(ks, int) else ks
+        self.ks = ks if isinstance(ks, (list, tuple)) else [ks]
         self.alpha = alpha
         self.metric = metric
         self.tol = tol
@@ -120,31 +125,38 @@ class SSKMeansTrainer:
         self.n_tries = n_tries
         self.verbose = verbose
 
-        self.METRIC_NAMES = {
+        self.metric_names = {
             'vosuda': VOSUDA_METRIC_NAMES,
             'cdar': CDAR_METRIC_NAMES,
         }[self.project_name]
 
-        self._get_inputs_and_anns()
+        if autoinit:
+            self._get_inputs_and_anns()
 
     def train(self):
         jobs = self._generate_jobs()
         results:ResultDict = self._train_all_kmeans_models(jobs)
         self._calculate_score_statistics_from_results_and_draw_best_model(results)
 
-    def display_and_save(self):
-        mi_columns = pd.MultiIndex.from_product([SPLIT_NAMES, self.METRIC_NAMES], names=['split', 'k'])
+    def display(self):
+        mi_columns = pd.MultiIndex.from_product([SPLIT_NAMES, self.metric_names], names=['split', 'k'])
         df_best = pd.DataFrame.from_dict({k: scores.reshape(-1) for k, scores in self.scores_best.items()}, columns=mi_columns, orient='index')
         df_mean = pd.DataFrame.from_dict({k: scores.reshape(-1) for k, scores in self.scores_mean.items()}, columns=mi_columns, orient='index')
         df_std = pd.DataFrame.from_dict({k: scores.reshape(-1) for k, scores in self.scores_std.items()}, columns=mi_columns, orient='index')
         with pd.option_context('display.float_format', '{:5.1f}'.format):
             print('best')
-            print(df_best)
+            print(100*df_best)
             print()
             print('mean')
-            print(df_mean)
+            print(100*df_mean)
             print('std')
-            print(df_std)
+            print(100*df_std)
+        return df_best, df_mean, df_std
+
+    def get_scores(self):
+        return self.scores_best[self.k_best][-1,:3]  # test, best k, ALL/Old/New
+
+    def save(self,df_best, df_mean, df_std):
         p_savedir = self.p_features.parent / 'sskmeans'
         p_savedir.mkdir(exist_ok=True)
         df_best.to_csv(p_savedir / 'best.csv')
@@ -192,12 +204,13 @@ class SSKMeansTrainer:
             Xs[split_name] = X
             f.close()
 
-        # to make closed
-        Xs['train_source'] = Xs['train_source'][anns['train_source']<self.num_known_classes]
-        anns['train_source'] = anns['train_source'][anns['train_source']<self.num_known_classes]
+        if self.project_name == 'vosuda':
+            # to make closed
+            Xs['train_source'] = Xs['train_source'][anns['train_source']<self.num_known_classes]
+            anns['train_source'] = anns['train_source'][anns['train_source']<self.num_known_classes]
 
-        self.Xs = Xs
-        self.anns = anns
+        self.Xs:Dict[str,np.ndarray] = Xs
+        self.anns:Dict[str,np.ndarray] = anns
 
     def _generate_jobs(self) -> list:
         jobs = []
@@ -232,47 +245,53 @@ class SSKMeansTrainer:
             k=k, known_data=known_data,
             alpha=self.alpha, metric=self.metric, tol=self.tol,
             seed=seed,
-            verbose=self.verbose).fit(X)
+            verbose=False).fit(X)
         return model
 
     def _get_scores_model(self, model) -> ScoreMatrix:
         scores_model:ScoreMatrix = []
-        pred_tests:dict = self._infer(model)
+        pred_tests:dict = self.predict(model)
         for split_name in SPLIT_NAMES:
             if self.anns[split_name] is None:
                 continue
 
             conf = confusion_matrix(pred_tests[split_name], self.anns[split_name])
-            scores_for_this_split = [self._get_score_from_confmat(conf, self.num_known_classes, metric_name) for metric_name in self.METRIC_NAMES]
+            if self.project_name == 'vosuda':
+                scores_for_this_split:List[float] = [self._get_score_from_confmat(conf, self.num_known_classes, metric_name) for metric_name in self.metric_names]
+            elif self.project_name == 'cdar':
+                if split_name == 'train_source':
+                    scores_for_this_split:List[float] = [0, 0, 0, 0, 0, 0]
+                else:
+                    scores_for_this_split:List[float] = self._get_gcd_scores(pred_tests[split_name], self.anns[split_name], self.num_known_classes)
             scores_model.append(scores_for_this_split)
 
             if self.verbose:
                 print(split_name.split('_')[0])
-                print(conf)
+                with np.printoptions(threshold=np.inf, linewidth=1000):
+                    print(conf)
                 print(' '.join([f'{score:.1f}' for score in scores_for_this_split]))
                 print()
         return scores_model
 
-    def _infer(self, model) -> dict:
+    def predict(self, model) -> Dict[str,Union[None,np.ndarray]]:
         pred_tests = {}
         for split_name, X in self.Xs.items():
             if X is not None:
                 pred_test = model.predict(X)
-                pred_test = np.minimum(self.num_known_classes, pred_test, dtype=np.int64)
+                if self.project_name == 'vosuda':
+                    pred_test = np.minimum(self.num_known_classes, pred_test, dtype=np.int64)
                 pred_tests[split_name] = pred_test
             else:
                 pred_tests[split_name] = None
         return pred_tests
 
-    @staticmethod
-    def _get_score_from_confmat(conf, num_known_classes, mode=METRIC_H):
-        if mode in VOSUDA_METRIC_NAMES:
-            if conf.shape[0] > num_known_classes + 1:
-                conf[num_known_classes] = conf[num_known_classes:].sum(axis=0)
-                conf = conf[:num_known_classes+1]
-            if conf.shape[1] > num_known_classes + 1:
-                conf[:,num_known_classes] = conf[:,num_known_classes:].sum(axis=1)
-                conf = conf[:,:num_known_classes+1]
+    def _get_score_from_confmat(self, conf, num_known_classes, metric_name:str=METRIC_H):
+        if conf.shape[0] > num_known_classes + 1:
+            conf[num_known_classes] = conf[num_known_classes:].sum(axis=0)
+            conf = conf[:num_known_classes+1]
+        if conf.shape[1] > num_known_classes + 1:
+            conf[:,num_known_classes] = conf[:,num_known_classes:].sum(axis=1)
+            conf = conf[:,:num_known_classes+1]
 
         correct = conf.diagonal()  # [K+1]
         label_dist = conf.sum(axis=1)  # [K+1]
@@ -302,14 +321,18 @@ class SSKMeansTrainer:
                 return np.NaN
             return recalls[-1]
 
-        VOSUDA_METRICS = [H, OS, OS_STAR, UNK]
-        CDAR_METRICS = []
-        is_CDAR = mode in CDAR_METRIC_NAMES
-        METRICS = [VOSUDA_METRICS, CDAR_METRICS][is_CDAR]
-        NAMES = [VOSUDA_METRIC_NAMES, CDAR_METRIC_NAMES][is_CDAR]
-
-        score = 100 * METRICS[NAMES.index(mode)](recalls)
+        metrics = [H, OS, OS_STAR, UNK]
+        score = 100 * metrics[self.metric_names.index(metric_name)](recalls)
         return score
+
+    def _get_gcd_scores(self, pred, gt, num_known_classes) -> List[float]:
+        old_mask = (gt < num_known_classes)
+        scores = []
+        total_acc, old_acc, new_acc = split_cluster_acc_v2_balanced(gt, pred, old_mask)
+        scores.extend([total_acc, old_acc, new_acc])
+        total_acc, old_acc, new_acc = split_cluster_acc_v2(gt, pred, old_mask)
+        scores.extend([total_acc, old_acc, new_acc])
+        return scores
 
     def _calculate_score_statistics_from_results_and_draw_best_model(self, results:ResultDict) -> None:
         self.scores_best:ScoreDict = {}
@@ -340,5 +363,5 @@ if __name__ == '__main__':
 
     trainer = SSKMeansTrainer(**args)
     trainer.train()
-    trainer.display_and_save()
+    trainer.display()
     trainer.write_results()

@@ -94,7 +94,7 @@ data = dict(
         pipeline=test_pipeline))
 
 evaluation = dict(
-    interval=1, metrics=['top_k_accuracy', 'mean_class_accuracy'])
+    interval=5, metrics=['top_k_accuracy', 'mean_class_accuracy'])
 
 # optimizer
 optimizer = dict(
@@ -113,8 +113,8 @@ optimizer_config = dict(grad_clip=dict(max_norm=40, norm_type=2))
 
 # learning policy
 lr_config = dict(policy='step', step=[5, 10])
-total_epochs = 15
+total_epochs = 50
 
 # runtime settings
-checkpoint_config = dict(interval=1)
-work_dir = './work_dirs/timesformer_divST_8x32x1_15e_kinetics400_rgb'
+# checkpoint_config = dict(interval=1)
+work_dir = './work_dirs/hello/timesformer_divST_8x32x1_15e_kinetics400_rgb'

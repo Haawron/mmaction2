@@ -295,7 +295,7 @@ class DARecognizer2D(Recognizer2D):
         if not self.contrastive:  # shuffle the batch
             indices = torch.randperm(imgs.shape[0])
             imgs = imgs[indices]
-            labels = labels[indices]
+            labels = labels[indices].to(imgs.device)
             domains = domains[indices]
 
         losses = self(imgs, labels, domains, return_loss=True, **kwargs)
