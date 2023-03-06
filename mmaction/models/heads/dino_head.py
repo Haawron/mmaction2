@@ -14,7 +14,7 @@ class BaseDINOHead:
 
         nlayers = max(nlayers, 1)
         if nlayers == 1:
-            self.mlp = nn.Linear(in_channels, bottleneck_dim)
+            self.mlp = nn.Sequential(nn.Linear(in_channels, bottleneck_dim))
         else:
             layers = [nn.Linear(in_channels, hidden_dim)]
             if use_bn:

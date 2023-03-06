@@ -1,12 +1,13 @@
 _base_ = ['../../_base_/default_runtime.py']
 
+find_unused_parameters = True
+
 # model settings
 model = dict(
     type='Recognizer3D',
     backbone=dict(
         type='TimeSformer',
-        pretrained=  # noqa: E251
-        'https://download.openmmlab.com/mmaction/recognition/timesformer/vit_base_patch16_224.pth',  # noqa: E501
+        pretrained=None,
         num_frames=8,
         img_size=224,
         patch_size=16,
@@ -16,18 +17,16 @@ model = dict(
         transformer_layers=None,
         attention_type='divided_space_time',
         norm_cfg=dict(type='LN', eps=1e-6)),
-    cls_head=dict(type='TimeSformerHead', num_classes=400, in_channels=768),
+    cls_head=dict(type='TimeSformerHead', num_classes=5, in_channels=768),
     # model training and testing settings
     train_cfg=None,
     test_cfg=dict(average_clips='prob'))
 
 # dataset settings
-dataset_type = 'RawframeDataset'
-data_root = 'data/kinetics400/rawframes_train'
-data_root_val = 'data/kinetics400/rawframes_val'
-ann_file_train = 'data/kinetics400/kinetics400_train_list_rawframes.txt'
-ann_file_val = 'data/kinetics400/kinetics400_val_list_rawframes.txt'
-ann_file_test = 'data/kinetics400/kinetics400_val_list_rawframes.txt'
+data_prefix = '/local_datasets/epic-kitchens-100/EPIC-KITCHENS'
+ann_file_train = 'data/_filelists/ek100/filelist_P02_train_closed.txt'
+ann_file_valid = 'data/_filelists/ek100/filelist_P02_valid_closed.txt'
+ann_file_test = 'data/_filelists/ek100/filelist_P02_test_closed.txt'
 
 img_norm_cfg = dict(
     mean=[127.5, 127.5, 127.5], std=[127.5, 127.5, 127.5], to_bgr=False)
@@ -74,24 +73,35 @@ test_pipeline = [
     dict(type='ToTensor', keys=['imgs', 'label'])
 ]
 data = dict(
-    videos_per_gpu=8,
-    workers_per_gpu=2,
-    test_dataloader=dict(videos_per_gpu=1),
+    videos_per_gpu=36,
+    workers_per_gpu=4,
+    test_dataloader=dict(videos_per_gpu=32),
     train=dict(
-        type=dataset_type,
+        type='RawframeDataset',
         ann_file=ann_file_train,
-        data_prefix=data_root,
+        data_prefix=data_prefix,
+        start_index=1,  # frame number starts with
+        filename_tmpl='frame_{:010}.jpg',
+        with_offset=True,
         pipeline=train_pipeline),
     val=dict(
-        type=dataset_type,
-        ann_file=ann_file_val,
-        data_prefix=data_root_val,
+        type='RawframeDataset',
+        ann_file=ann_file_valid,
+        data_prefix=data_prefix,
+        start_index=1,  # frame number starts with
+        filename_tmpl='frame_{:010}.jpg',
+        with_offset=True,
         pipeline=val_pipeline),
     test=dict(
-        type=dataset_type,
+        type='RawframeDataset',
         ann_file=ann_file_test,
-        data_prefix=data_root_val,
-        pipeline=test_pipeline))
+        data_prefix=data_prefix,
+        start_index=1,  # frame number starts with
+        filename_tmpl='frame_{:010}.jpg',
+        with_offset=True,
+        pipeline=test_pipeline)
+)
+
 
 evaluation = dict(
     interval=5, metrics=['top_k_accuracy', 'mean_class_accuracy'])
@@ -118,3 +128,4 @@ total_epochs = 50
 # runtime settings
 # checkpoint_config = dict(interval=1)
 work_dir = './work_dirs/hello/timesformer_divST_8x32x1_15e_kinetics400_rgb'
+load_from = 'data/weights/timesformer/timesformer_divST_8x32x1_15e_kinetics400_rgb-3f8e5d03.pth'

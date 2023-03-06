@@ -34,7 +34,7 @@ orders = {
     'subtask': {},
     'model': {},
 }
-p = Path('/data/hyogun/repos/haawron_mmaction2/work_dirs/train_output/cdar')
+p = Path('/data/gunsbrother/repos/haawron_mmaction2/work_dirs/train_output/cdar')
 records = []
 for p_pkl in p.rglob('best_pred.pkl'):
     task, subtask, model, add_on, extra_setting, jobname, job_array_idx, *_ = p_pkl.parts[p_pkl.parts.index('cdar')+1:]
