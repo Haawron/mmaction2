@@ -3,6 +3,7 @@ import re
 import argparse
 
 import pandas as pd
+import os
 
 
 only_best_children = True
@@ -26,6 +27,7 @@ dispmap = {
 
 parser = argparse.ArgumentParser('')
 parser.add_argument('-p', '--show-path', action='store_true')
+parser.add_argument('-P', '--parsable', action='store_true')
 parser.add_argument('-k', '--show-kmeans', action='store_true')
 args = parser.parse_args()
 
@@ -34,7 +36,7 @@ orders = {
     'subtask': {},
     'model': {},
 }
-p = Path('/data/gunsbrother/repos/haawron_mmaction2/work_dirs/train_output/cdar')
+p = Path(f'/data/{os.environ["USER"]}/repos/haawron_mmaction2/work_dirs/train_output/cdar')
 records = []
 for p_pkl in p.rglob('best_pred.pkl'):
     task, subtask, model, add_on, extra_setting, jobname, job_array_idx, *_ = p_pkl.parts[p_pkl.parts.index('cdar')+1:]
@@ -126,5 +128,8 @@ else:
         cols += ['jid']
     df = df[cols]
     df = df.rename(columns=dispmap)
-    with pd.option_context('display.precision', 1, 'max_colwidth', None):
+    print_args = ['display.precision', 1, 'max_colwidth', None]
+    if args.parsable:
+        print_args += ['display.multi_sparse', False]
+    with pd.option_context(*print_args):
         print(df)

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH -J {{ source }}_{{ target }}-tsf-warmup
+#SBATCH -J {{ source }}_{{ target }}-tsf
 #SBATCH -p batch_grad
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-gpu=16
@@ -18,7 +18,7 @@ project='cdar'
 task='02_ek100'  # table name
 subtask={{ idx }}_{{ source }}_{{ target }}  # column
 model='02_timesformer'  # row
-add_on='warmup'
+add_on='k400'
 extra_setting='default'  # 'default' if none
 path_experiment="${project}/${task}/${subtask}/${model}/${add_on}/${extra_setting}"
 
@@ -30,7 +30,7 @@ workdir="${workdir}/${SLURM_ARRAY_JOB_ID}__${SLURM_JOB_NAME}/${SLURM_ARRAY_TASK_
 lrs=(5e-3 1e-3 5e-4 1e-4)
 lr="${lrs[SLURM_ARRAY_TASK_ID]}"
 
-config_j2='configs/recognition/cdar/02_ek100/02_timesformer/template/tsf_warmup.py.j2'
+config_j2='configs/recognition/cdar/02_ek100/02_timesformer/template/tsf.py.j2'
 rendered_dir="${config_j2%template*}rendered"  # **/template/* -> **/rendered
 mkdir -p $rendered_dir
 config="${rendered_dir}/{{ source }}_{{ target }}_$(basename $config_j2 .j2)"

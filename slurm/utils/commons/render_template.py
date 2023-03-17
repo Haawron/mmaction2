@@ -21,7 +21,7 @@ def main():
         comment_end_string='=}',
     )
     env.filters['regex_replace'] = regex_replace
-    jinja_vars = get_all_jinja_vars(env, args.shell_file.name)
+    jinja_vars = get_all_jinja_vars(env, args.template_file.name)
     parser = argparse.ArgumentParser(description='')
     for jinja_var in jinja_vars:
         parser.add_argument(f'--{jinja_var}', type=str, required=True)

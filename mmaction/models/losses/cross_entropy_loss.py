@@ -3,6 +3,8 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
+import inspect
+
 from ..builder import LOSSES
 from .base import BaseWeightedLoss
 
@@ -37,7 +39,7 @@ class CrossEntropyLoss(BaseWeightedLoss):
         if class_weight is not None:
             self.class_weight = torch.Tensor(class_weight)
 
-    def _forward(self, cls_score, label, **kwargs):
+    def _forward(self, cls_score, label, domains=None, **kwargs):
         """Forward function.
 
         Args:
@@ -49,6 +51,11 @@ class CrossEntropyLoss(BaseWeightedLoss):
         Returns:
             torch.Tensor: The returned CrossEntropy loss.
         """
+        if domains is not None:
+            source_idx = domains == 'source'
+            cls_score = cls_score[source_idx]
+            label = label[source_idx]
+
         if cls_score.size() == label.size():
             # calculate loss for soft label
 
@@ -78,7 +85,9 @@ class CrossEntropyLoss(BaseWeightedLoss):
                 assert 'weight' not in kwargs, \
                     "The key 'weight' already exists."
                 kwargs['weight'] = self.class_weight.to(cls_score.device)
-            loss_cls = F.cross_entropy(cls_score, label, **kwargs)
+
+            expected_kwargs = [p.name for p in inspect.signature(F.cross_entropy).parameters.values() if p.default != inspect.Parameter.empty]
+            loss_cls = F.cross_entropy(cls_score, label, **{k: kwargs[k] for k in expected_kwargs if k in kwargs})
 
         return loss_cls
 

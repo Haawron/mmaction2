@@ -1,0 +1,49 @@
+#!/bin/bash
+
+#SBATCH -J {{ idx }}_{{ source }}_{{ target }}-gcd-from_dann
+#SBATCH -p batch_grad
+#SBATCH --gres=gpu:4
+#SBATCH --cpus-per-gpu=16
+#SBATCH --mem-per-gpu=25G
+#SBATCH -t 1-0
+#SBATCH -x ariel-g[1,3-5]
+#SBATCH --array 0-3%4
+#SBATCH -o slurm/logs/slurm-%A_%a-%x.out
+
+current_time=$(date +'%Y%m%d-%H%M%S')
+
+
+# overleaf table 기준
+project='cdar'
+task='02_ek100'  # table name
+subtask="{{ idx }}_{{ source }}_{{ target }}"  # column
+model='05_gcd'  # row
+add_on='dann'
+extra_setting='default'  # 'default' if none
+path_experiment="${project}/${task}/${subtask}/${model}/${add_on}/${extra_setting}"
+
+workdir="work_dirs/train_output"
+workdir="${workdir}/${path_experiment}"
+workdir="${workdir}/${SLURM_ARRAY_JOB_ID}__${SLURM_JOB_NAME}/${SLURM_ARRAY_TASK_ID}/${current_time}"
+
+# best dann ckpts
+dann_ckpts=($(python slurm/cdar/print_cdar_scores.py -p | grep dann | while read line; do p=$(awk '{print $6}' <<< $line); find $p -name 'best*.pth'; done | sort))
+ckpt="${dann_ckpts[{{ idx }}]}"
+
+lrs=(5e-3 1e-3 5e-4 1e-4)
+lr="${lrs[SLURM_ARRAY_TASK_ID]}"
+
+config_j2='configs/recognition/cdar/02_ek100/05_gcd/template/gcd.py.j2'
+rendered_dir="${config_j2%template*}rendered"  # **/template/* -> **/rendered
+mkdir -p $rendered_dir
+config="${rendered_dir}/{{ source }}_{{ target }}_$(basename $config_j2 .j2)"
+python slurm/utils/commons/render_template.py -f $config_j2 --source {{ source }} --target {{ target }} > $config
+
+N=$SLURM_GPUS_ON_NODE
+OMP_NUM_THREADS=${N} MKL_NUM_THREADS=${N} torchrun --nproc_per_node="${N}" --master_port=$((10000+RANDOM%20000)) tools/train.py $config \
+    --launcher pytorch \
+    --work-dir "$workdir" \
+    --cfg-options optimizer.lr="$lr" load_from=$ckpt \
+    --validate --test-last --test-best
+
+exit 0

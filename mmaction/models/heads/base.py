@@ -106,7 +106,7 @@ class BaseHead(nn.Module, metaclass=ABCMeta):
     def forward(self, x):
         """Defines the computation performed at every call."""
 
-    def loss(self, cls_score, labels, **kwargs):
+    def loss(self, cls_score, labels, domains=None, **kwargs):
         """Calculate the loss given output ``cls_score``, target ``labels``.
 
         Args:
@@ -128,7 +128,7 @@ class BaseHead(nn.Module, metaclass=ABCMeta):
             labels = labels.unsqueeze(0)
 
         if not self.multi_class and cls_score.size() != labels.size() and self.topk is not None:
-            top_k_acc = self.calc_topk(cls_score, labels, self.topk)
+            top_k_acc = self.calc_topk(cls_score, labels, self.topk, domains=domains)
             for k, a in zip(self.topk, top_k_acc):
                 losses[f'top{k}_acc'] = a
 
@@ -137,10 +137,10 @@ class BaseHead(nn.Module, metaclass=ABCMeta):
                       self.label_smooth_eps / self.num_classes)
 
         if self.print_mca:
-            mca = self.calc_mca(cls_score, labels)
+            mca = self.calc_mca(cls_score, labels, domains=domains)
             losses['mca'] = mca
 
-        loss_cls = self.loss_cls(cls_score, labels, **kwargs)
+        loss_cls = self.loss_cls(cls_score, labels, domains=domains, **kwargs)
         # loss_cls may be dictionary or single tensor
         if isinstance(loss_cls, dict):
             losses.update(loss_cls)
@@ -149,7 +149,11 @@ class BaseHead(nn.Module, metaclass=ABCMeta):
 
         return losses
 
-    def calc_topk(self, cls_score, labels, topk):
+    def calc_topk(self, cls_score, labels, topk, domains=None):
+        if domains is not None:
+            source_idx = domains == 'source'
+            cls_score = cls_score[source_idx]
+            labels = labels[source_idx]
         cls_score = cls_score[0] if type(cls_score) == list else cls_score  # list: dann
         top_k_acc = top_k_accuracy(
             cls_score.detach().cpu().numpy(),
@@ -157,7 +161,11 @@ class BaseHead(nn.Module, metaclass=ABCMeta):
             topk)
         return [torch.tensor(acc, device=cls_score.device) for acc in top_k_acc]
 
-    def calc_mca(self, cls_score, labels):
+    def calc_mca(self, cls_score, labels, domains=None):
+        if domains is not None:
+            source_idx = domains == 'source'
+            cls_score = cls_score[source_idx]
+            labels = labels[source_idx]
         mca = mean_class_accuracy(
             cls_score.detach().cpu().numpy(),
             labels.detach().cpu().numpy()
@@ -173,6 +181,7 @@ class BaseHead(nn.Module, metaclass=ABCMeta):
             return x.view((-1, self.num_segments) + x.size()[1:])
 
 
+# 이게 필요한가? 어차피 domains를 kwargs로 처리하는데
 class BaseDAHead(BaseHead):
     def loss(self, cls_score, labels, domains, **kwargs):
         losses = dict()

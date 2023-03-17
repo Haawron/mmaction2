@@ -2,7 +2,7 @@
 import warnings
 from abc import ABCMeta, abstractmethod
 from collections import OrderedDict
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 
 import torch
 import torch.distributed as dist
@@ -77,7 +77,7 @@ class BaseRecognizer(nn.Module, metaclass=ABCMeta):
             self.backbone = builder.build_backbone(backbone)
 
         if neck is not None:
-            if isinstance(neck, Iterable):
+            if isinstance(neck, Iterable) and not isinstance(neck, Mapping):  # list-like but not dict-like
                 # modulelist helps torch to detect modules inside the built-in python list
                 # so that model.cuda() recursively
                 self.neck = nn.ModuleList([builder.build_neck(vertebra) for vertebra in neck])
