@@ -5,7 +5,7 @@ set -e
 ckpts=(
     'data/weights/svt/releases/download/v1.0/SVT_mmaction.pth'
     'data/weights/timesformer/timesformer_divST_8x32x1_15e_kinetics400_rgb-3f8e5d03.pth.1'
-    'data/weights/timesformer/timesformer_8x32_224_howto100M_mmaction.pth'
+    'data/weights/timesformer/timesformer_8x32_224_howto100m_mmaction.pyth'
     'data/weights/timesformer/timesformer_8_224_ssv2_mmaction.pyth'
     'data/weights/vit/vit_base_patch16_224.pth'
 )
@@ -29,9 +29,9 @@ declare -A tasks=(
 declare -A configs=(
     ['ucf']='configs/recognition/hello/vanilla/vanilla_svt_ucf101_open.py'
     ['hmdb']='configs/recognition/hello/vanilla/vanilla_svt_hmdb51_open.py'
-    ['P02']='configs/recognition/hello/vanilla/vanilla_svt_ek100.py'
-    ['P04']='configs/recognition/hello/vanilla/vanilla_svt_ek100.py'
-    ['P22']='configs/recognition/hello/vanilla/vanilla_svt_ek100.py'
+    ['P02']='configs/recognition/hello/vanilla/vanilla_svt_ek100_open.py'
+    ['P04']='configs/recognition/hello/vanilla/vanilla_svt_ek100_open.py'
+    ['P22']='configs/recognition/hello/vanilla/vanilla_svt_ek100_open.py'
     ['k400']='configs/recognition/hello/vanilla/vanilla_timesformer_k400_open.py'
     ['babel']='configs/recognition/hello/vanilla/vanilla_timesformer_babel_open.py'
 )
@@ -94,7 +94,7 @@ for i in $(seq 0 $(( ${#ckpts[@]} - 1 ))); do  # for each ckpt
                 else
                     dataset_prefix="${dataset_prefixes[$dataset]}"
                 fi
-                [ ! -d "$dataset_prefix" ] && { echo "wrong data_prefix: $dataset_prefix"; exit; }
+                [ ! -d "$dataset_prefix" ] && { echo "wrong data_prefix: $dataset_prefix"; continue; }
                 echo -e "\t\t\t\t$outfile"
                 [ -f "$outfile" ] && { echo -e "\t\t\t\t\tpassed, already exists"; continue; }
                 OMP_NUM_THREADS=${N} MKL_NUM_THREADS=${N} torchrun --nproc_per_node="${N}" --master_port=$((10000+RANDOM%20000)) tools/test.py \

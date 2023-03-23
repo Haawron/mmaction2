@@ -25,4 +25,4 @@ optimizer_config = dict(grad_clip=dict(max_norm=40, norm_type=2))
 lr_config = dict(policy='CosineAnnealing', min_lr=lr*1e-3)
 total_epochs = 50
 work_dir = './work_dirs/train_output/hello/cdar'
-load_from = None
+load_from = 'data/weights/timesformer/timesformer_8x32_224_howto100m_mmaction.pyth'

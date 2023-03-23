@@ -24,14 +24,14 @@ class OSBPLoss(BaseWeightedLoss):
             self,
             num_classes,
             target_domain_label=.5,
-            weight_loss=2.,
+            weight_loss_target=1e-3,
         ):
         super().__init__()
         self.num_classes = num_classes
         self.target_domain_label = target_domain_label
         self.loss_cls = torch.nn.CrossEntropyLoss()
         self.bce = torch.nn.BCELoss()
-        self.weight_loss = weight_loss
+        self.weight_loss_target = weight_loss_target
         
     def loss_adv(self, logits, t):
         p = F.softmax(logits, dim=1)[:,-1]  # being unknown
@@ -61,4 +61,4 @@ class OSBPLoss(BaseWeightedLoss):
         loss_t = self.loss_adv(logits_target, self.target_domain_label)
 
         # return loss_s + loss_t
-        return {'loss_cls': loss_s, 'loss_target': self.weight_loss * loss_t}
+        return {'loss_source_cls': loss_s, 'loss_target': self.weight_loss_target * loss_t}

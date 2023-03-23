@@ -24,9 +24,10 @@ from .tsm_cop_head import TSMCOPHead
 from .x3d_cop_head import X3DCOPHead
 from .timesformer_cop_head import TimeSFormerCOPHead
 from .dino_head import DINODAHead, TSMDINODAHead, DINOHead
-from .osbp_svt_head import OSBPDINODAHead
+from .osbp_tsf_head import OSBPDINODAHead
 from .dann_svt_head import DANNDINODAHead
 from .places_head import PlacesHead
+from .identity import IdentityHead
 
 __all__ = [
     'TSNHead', 'I3DHead', 'BaseHead', 'TSMHead', 'SlowFastHead', 'SSNHead',
@@ -34,5 +35,7 @@ __all__ = [
     'FBOHead', 'LFBInferHead', 'TRNHead', 'TimeSformerHead', 'ACRNHead',
     'STGCNHead', 'OSBPTSMHead', 'DANNTSMHead', 'ContrastiveDATSMHead', 'TSMCOPHead',
     'X3DCOPHead', 'ContrastiveDATransformerHead', 'TimeSFormerCOPHead', 'DINODAHead',
-    'TSMDINODAHead', 'OSBPDINODAHead', 'DANNDINODAHead', 'DINOHead', 'PlacesHead'
+    'TSMDINODAHead', 'OSBPDINODAHead', 'DANNDINODAHead', 'DINOHead', 'PlacesHead',
+
+    'IdentityHead'
 ]

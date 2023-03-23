@@ -6,7 +6,7 @@ from ..builder import HEADS
 from .base import BaseDAHead
 from .osbp_tsm_head import GradReverse
 
-
+# TODO: Make MLP-layered
 @HEADS.register_module()
 class OSBPDINODAHead(BaseDAHead):
     def __init__(

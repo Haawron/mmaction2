@@ -117,7 +117,7 @@ if args.in_pivot:
         df_average = pd.concat([df_average], keys=['Average' + ' '*(len(df_task['subtask'][0])-len('ALL(B)'))], names=['subtask'], axis=1)  # insert level 0 column
         df_task = df_task.pivot_table(values='value', index=['model'], columns=['subtask', 'metric'], sort=False)
         df_task = df_task.sort_index(key=lambda models: models.map(orders['model']))
-        df_task = pd.concat([df_task, df_average], axis=1)
+        df_task = pd.concat([df_task, df_average], axis=1).fillna('-')
         df_task = df_task.rename(columns=lambda s: s.replace('_', ' → '), level=0)
         df_task = df_task.rename(columns=dispmap, level=1)
         with pd.option_context(*print_args):

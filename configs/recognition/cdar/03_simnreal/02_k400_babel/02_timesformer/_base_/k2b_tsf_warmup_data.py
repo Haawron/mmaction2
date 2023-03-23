@@ -81,7 +81,7 @@ valtest_pipeline_target = [
 data = dict(
     videos_per_gpu=10,
     workers_per_gpu=4,
-    test_dataloader=dict(videos_per_gpu=20),
+    test_dataloader=dict(videos_per_gpu=10),
     train=dict(
         **dataset_types[dataset_settings['source']['dataset_type']],
         ann_file=dataset_settings['source']['train']['ann_file'],

@@ -1,6 +1,6 @@
 from ..builder import HEADS
 
-from .osbp_svt_head import OSBPDINODAHead
+from .osbp_tsf_head import OSBPDINODAHead
 from .dann_tsm_head import GradReverse
 
 import torch
