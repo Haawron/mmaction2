@@ -146,7 +146,7 @@ pipelines = dict(
 )
 data = dict(
     videos_per_gpu=40,
-    workers_per_gpu=4,
+    workers_per_gpu=16,
     val_dataloader=dict(videos_per_gpu=40),
     train=[
         dict(

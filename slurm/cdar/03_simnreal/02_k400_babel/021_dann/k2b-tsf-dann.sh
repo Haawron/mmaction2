@@ -7,7 +7,7 @@
 #SBATCH --mem-per-gpu=25G
 #SBATCH -t 4-0
 #SBATCH -x vll1,augi1,agi[1-2]
-#SBATCH --array 0-3%2
+#SBATCH --array 0-3%4
 #SBATCH -o slurm/logs/slurm-%A_%a-%x.out
 
 current_time=$(date +'%Y%m%d-%H%M%S')

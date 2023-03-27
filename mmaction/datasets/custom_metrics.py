@@ -98,7 +98,7 @@ def split_cluster_acc_v2_balanced(y_true, y_pred, mask):
     total_acc = np.concatenate([old_acc, new_acc]) / np.concatenate([total_old_instances, total_new_instances])
     old_acc /= total_old_instances
     new_acc /= total_new_instances
-    total_acc, old_acc, new_acc = total_acc.mean(), old_acc.mean(), new_acc.mean()
+    total_acc, old_acc, new_acc = total_acc.mean(), old_acc.mean(), new_acc.mean() if new_acc.size != 0 else 0
     return total_acc, old_acc, new_acc
 
 

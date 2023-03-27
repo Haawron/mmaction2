@@ -123,7 +123,14 @@ def main():
         distributed = False
     else:
         distributed = True
-        init_dist(args.launcher, **cfg.dist_params)
+        if args.launcher == 'deepspeed':
+            import deepspeed
+            # rank = int(os.environ['RANK'])
+            # num_gpus = torch.cuda.device_count()
+            # torch.cuda.set_device(rank % num_gpus)
+            deepspeed.init_distributed()
+        else:
+            init_dist(args.launcher, **cfg.dist_params)
         _, world_size = get_dist_info()
         cfg.gpu_ids = range(world_size)
 

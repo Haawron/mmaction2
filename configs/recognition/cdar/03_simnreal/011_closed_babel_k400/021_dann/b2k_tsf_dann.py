@@ -1,9 +1,12 @@
 _base_ = [
-    # './_base_/b2k_gcd_data.py',
-    '../_base_/b2k_training.py',
-    # '../../_base_/gcd_model.py',
+    # '../03_gcd/_base_/k2b_gcd_data.py',
+    '../b2k_closed_training.py',
+    # '../../_base_/tsf_warmup_model.py',
     '../../../../../_base_/default_runtime.py',
 ]
+
+#####################################################################################################################
+# model
 
 num_classes = 12
 domain_adaptation = True
@@ -39,6 +42,8 @@ model = dict(
     train_cfg=None,
     test_cfg=dict(feature_extraction=True))
 
+#####################################################################################################################
+# data
 
 datasets = dict(
     ContrastiveRawframeDataset=dict(
@@ -77,17 +82,17 @@ dataset_settings = dict(
         train=dict(
             **datasets['VideoDataset'],
             data_prefix='/local_datasets/kinetics400/videos/train',
-            ann_file='data/_filelists/k400/processed/filelist_k400_train_open_all.txt'),
+            ann_file='data/_filelists/k400/processed/filelist_k400_train_closed.txt'),
         valid=dict(
             **datasets['VideoDataset'],
             test_mode=True,
             data_prefix='/local_datasets/kinetics400/videos/val',
-            ann_file='data/_filelists/k400/processed/filelist_k400_test_merged_open_all.txt'),
+            ann_file='data/_filelists/k400/processed/filelist_k400_test_closed.txt'),
         test=dict(
             **datasets['VideoDataset'],
             test_mode=True,
             data_prefix='/local_datasets/kinetics400/videos/train',
-            ann_file='data/_filelists/k400/processed/filelist_k400_train_open_all.txt')))
+            ann_file='data/_filelists/k400/processed/filelist_k400_train_closed.txt')))
 
 img_norm_cfg = dict(
     mean=[127.5, 127.5, 127.5], std=[127.5, 127.5, 127.5], to_bgr=False)

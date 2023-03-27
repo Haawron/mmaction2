@@ -207,7 +207,8 @@ def train_model(model,
     if cfg.resume_from:
         runner.resume(cfg.resume_from)
     elif cfg.load_from:
-        runner.load_checkpoint(cfg.load_from)
+        revise_keys = cfg.get('ckpt_revise_keys', [(r'^module.', '')])
+        runner.load_checkpoint(cfg.load_from, revise_keys=revise_keys)
     runner_kwargs = dict()
     if cfg.omnisource or cfg.domain_adaptation:
         runner_kwargs = dict(train_ratio=train_ratio)
