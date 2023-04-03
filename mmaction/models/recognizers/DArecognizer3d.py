@@ -32,11 +32,11 @@ class DARecognizer3D(DARecognizer2D):
             if not isinstance(vertebrae, Iterable):
                 vertebrae = [vertebrae]
             for vertebra in vertebrae:
-                x, loss_aux = vertebra(x, labels.squeeze(), domains=domains, **kwargs)
+                x, loss_aux = vertebra(x, labels.squeeze(dim=1), domains=domains, **kwargs)
                 losses.update(loss_aux)
 
         cls_score = self.cls_head(x, domains)
-        gt_labels = labels.squeeze()
+        gt_labels = labels.squeeze(dim=1)
         loss_cls = self.cls_head.loss(cls_score, gt_labels, domains, **kwargs)
         losses.update(loss_cls)
 

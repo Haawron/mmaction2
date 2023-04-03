@@ -2,6 +2,7 @@ from pathlib import Path
 import re
 import os
 import argparse
+import socket
 
 import numpy as np
 import pandas as pd
@@ -42,7 +43,9 @@ orders = {
     'subtask': {},
     'model': {},
 }
-p = Path(f'/data/{os.environ["USER"]}/repos/haawron_mmaction2/work_dirs/train_output/cdar')
+
+# TODO: 다른 사람이 실행했을 때
+p = Path(f'/data/hyogun/repos/haawron_mmaction2/work_dirs/train_output/cdar')
 records = []
 for p_pkl in p.rglob('best_pred.pkl'):
     task, subtask, model, add_on, extra_setting, jobname, job_array_idx, *_ = p_pkl.parts[p_pkl.parts.index('cdar')+1:]

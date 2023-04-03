@@ -281,7 +281,7 @@ def train_model(model,
                 ]:
                     eval_cfg.pop(key, None)
 
-                eval_res = test_dataset.evaluate(outputs, **eval_cfg)
                 runner.logger.info(f'Testing results of the {name} checkpoint')
+                eval_res = test_dataset.evaluate(outputs, logger=runner.logger, **eval_cfg)
                 for metric_name, val in eval_res.items():
                     runner.logger.info(f'{metric_name}: {val:.04f}')

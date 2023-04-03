@@ -290,9 +290,15 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
             if metric == 'confusion_matrix':
                 pred = np.argmax(results, axis=1)
                 conf = confusion_matrix(pred, gt_labels)
+                conf_normed = conf / (conf.sum(axis=1, keepdims=True)+1e-6)
                 h, w = conf.shape
+                s = ''
                 with np.printoptions(threshold=np.inf, linewidth=np.inf):  # thres: # elems, width: # chars
-                    s = str(conf)
+                    s += 'Confusion matrix\n'
+                    s += str(conf) + '\n\n'
+                with np.printoptions(threshold=np.inf, linewidth=np.inf, precision=0, suppress=True):
+                    s += 'Normalized Confusion matrix\n'
+                    s += str(100*conf_normed) + '\n'
                 if 'SRUN_DEBUG' in os.environ:  # if in srun(debuging) session
                     for start, end in reversed([(m.start(0), m.end(0)) for i, m in enumerate(re.finditer(r'\d+', str(s))) if i%h == i//w]):
                         s = s[:start] + '\033[1m' + s[start:end] + '\033[0m' + s[end:]  # diag vals to be bold

@@ -1,7 +1,10 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 from abc import ABCMeta, abstractmethod
 
+import torch
 import torch.nn as nn
+
+from ...core import mean_class_accuracy
 
 
 class BaseWeightedLoss(nn.Module, metaclass=ABCMeta):
@@ -43,3 +46,10 @@ class BaseWeightedLoss(nn.Module, metaclass=ABCMeta):
         else:
             ret *= self.loss_weight
         return ret
+
+    def calc_mca(self, cls_score, labels):
+        mca = mean_class_accuracy(
+            cls_score.detach().cpu().numpy(),
+            labels.detach().cpu().numpy()
+        )
+        return torch.tensor(mca, device=cls_score.device)

@@ -271,6 +271,7 @@ class SampleFrames:
         return repr_str
 
 
+# https://github.com/xudejing/video-clip-order-prediction/blob/7a1710d3debd66a328e2395676fecd18ecdebeae/datasets/ucf101.py#L190
 @PIPELINES.register_module()
 class COPSampleFrames(SampleFrames):
     def __init__(
@@ -281,6 +282,16 @@ class COPSampleFrames(SampleFrames):
         frame_interval=1,
         test_mode=False,
     ):
+        """Why this class is needed even we already have SampleFrames
+
+        Example of each class:
+        if we have parameters
+            num_clips = 3
+            clip_len = 5
+
+        SampleFrames) 1 32 1 23   12 3  1  2   3     21   3
+        COPSampleFrames) 1111 1    22  22 2    33  33 3
+        """
         self.num_clips = num_clips
         self.clip_len = clip_len
         self.clip_interval = clip_interval

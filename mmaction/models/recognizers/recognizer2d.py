@@ -1,8 +1,11 @@
 # Copyright (c) OpenMMLab. All rights reserved.
+from collections.abc import Iterable
+
 import torch
 from torch import nn
 import torch.nn.functional as F
 import numpy as np
+from einops import rearrange, repeat
 
 from ..builder import RECOGNIZERS
 from .base import BaseRecognizer
@@ -205,36 +208,28 @@ class DARecognizer2D(Recognizer2D):
 
     def _reshape_inputs(self, imgs, labels, domains):
         dim = imgs.dim()
-        B = imgs.shape[0] // 2
         if self.contrastive:
-            assert dim in [6, 7], f'Wrong input dimension {imgs.dim}. Should be 6 or 7'
             if dim == 6:  # NCHW (default)
-                # [2B, 2, N, C, H, W] -> [2B * 2 * N, C, H, W]
-                N, T = None, imgs.shape[2]  # N acts like T
+                # [2B x N=1, V=2, T, C, H, W] -> [2B x V=2 x T, C, H, W]
+                imgs = rearrange(imgs, '(bb n) v t c h w -> (bb v n t) c h w', n=1)
             elif dim == 7:  # NCTHW (COP multi-task)
-                # [2B, 2, N, C, T, H, W] -> [2B * 2 * N * T, C, H, W]
-                N, T = imgs.shape[2], imgs.shape[4]
-                imgs = imgs.transpose(3, 4)
-            imgs = imgs.reshape((-1, ) + imgs.shape[-3:])
-            labels = labels.reshape((-1, ) + labels.shape[2:])  # [2B, 2, 1] -> [2B*2, 1]
-            domains = domains.reshape(-1)
+                # [2B, V=2, N=3, C, T, H, W] -> [2B * V=2 * N=3 * T, C, H, W]
+                imgs = rearrange(imgs, 'bb v n t c h w -> (bb v n t) c h w')
+            labels = rearrange(labels, 'bb v m -> (bb v) m')  # [2B, 2, 1] -> [2B*2, 1]
+            domains = repeat(domains, 'bb -> (bb 2)')
         else:
-            assert dim in [5, 6], f'Wrong input dimension {imgs.dim}. Should be 5 or 6'
-            if dim == 5:  # NCHW
-                # [2B, N, C, H, W] -> [2B * N, C, H, W]
-                N, T = None, imgs.shape[1]
-            elif dim == 6:  # NCTHW
-                # [2B, N, C, T, H, W] -> [2B * N * T, C, H, W]
-                N, T = imgs.shape[1], imgs.shape[3]
-                imgs = imgs.transpose(2, 3)
-            imgs = imgs.reshape((-1, ) + imgs.shape[-3:])
-        self.B, self.N, self.T = B, N, T  # static values throughout the training
-        gt_labels = labels.squeeze()  # [2B] or [2B*2]
-        return imgs, gt_labels, domains
+            if dim == 5:  # NCHW, [2B x N=1, T, C, H, W]
+                pass
+            elif dim == 6:
+                # [2B, N=3, C, T, H, W] -> [2B x N=3 x T, C, H, W]
+                imgs = rearrange(imgs, 'bb n c t h w -> (bb n t) c h w')
+        # imgs: [_, C, H, W]
+        labels = labels.squeeze(dim=1)  # [2B] or [2B*2]
+        return imgs, labels, domains
 
     def forward_train(self, imgs, labels, domains, **kwargs):
         assert self.with_cls_head
-        imgs, gt_labels, domains = self._reshape_inputs(imgs, labels, domains)
+        imgs, labels, domains = self._reshape_inputs(imgs, labels, domains)
 
         losses = dict()
 
@@ -248,15 +243,19 @@ class DARecognizer2D(Recognizer2D):
             x = x.reshape((x.shape[0], -1))
             x = x.reshape(x.shape + (1, 1))
 
-        if self.with_neck:  # auxiliary
-            x, loss_aux = self.neck(x, None, domains, gt_labels)
-            losses.update(loss_aux)
+        if self.with_neck:
+            vertebrae = self.neck
+            if not isinstance(vertebrae, Iterable):
+                vertebrae = [vertebrae]
+            for vertebra in vertebrae:
+                x, loss_aux = vertebra(x, labels, domains=domains, **kwargs)
+                losses.update(loss_aux)
 
         cls_score = self.cls_head(x, None, domains)  # [2B(*2)(*N)(*T), 1~3, C, 7, 7]
-        if self.N is not None:
-            cls_score = cls_score.reshape(-1, self.N, *cls_score.shape[-2:])
+        # if self.N is not None:
+        #     cls_score = cls_score.reshape(-1, self.N, *cls_score.shape[-2:])
 
-        loss_cls = self.cls_head.loss(cls_score, gt_labels, domains, **kwargs)
+        loss_cls = self.cls_head.loss(cls_score, labels, domains, **kwargs)
         losses.update(loss_cls)
 
         return losses
@@ -331,8 +330,12 @@ class DARecognizer2D(Recognizer2D):
             x = x.reshape((x.shape[0], -1))
             x = x.reshape(x.shape + (1, 1))
 
-        if self.with_neck and not self.neck.is_aux:  # auxiliary
-            x, _ = self.neck(x, None, domains)
+        if self.with_neck:
+            vertebrae = self.neck
+            if not isinstance(vertebrae, Iterable):
+                vertebrae = [vertebrae]
+            for vertebra in vertebrae:
+                x, _ = vertebra(x, None, domains=domains)
 
         if self.feature_extraction:
             x = nn.AdaptiveAvgPool2d(1)(x)  # [X, C_feat, 1, 1]

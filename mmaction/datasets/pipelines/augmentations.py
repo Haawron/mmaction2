@@ -104,7 +104,7 @@ class PytorchVideoTrans:
         type (str): The name of the pytorchvideo transformation.
     """
 
-    def __init__(self, type, **kwargs):
+    def __init__(self, trans_type, **kwargs):
         try:
             import pytorchvideo.transforms as ptv_trans
             import torch
@@ -114,27 +114,27 @@ class PytorchVideoTrans:
             raise RuntimeError(
                 'The version of PyTorch should be at least 1.8.0')
 
-        trans = getattr(ptv_trans, type, None)
-        assert trans, f'Transform {type} not in pytorchvideo'
+        trans = getattr(ptv_trans, trans_type, None)
+        assert trans, f'Transform {trans_type} not in pytorchvideo'
 
         supported_pytorchvideo_trans = ('AugMix', 'RandAugment',
                                         'RandomResizedCrop', 'ShortSideScale',
                                         'RandomShortSideScale')
-        assert type in supported_pytorchvideo_trans,\
-            f'PytorchVideo Transform {type} is not supported in MMAction2'
+        assert trans_type in supported_pytorchvideo_trans,\
+            f'PytorchVideo Transform {trans_type} is not supported in MMAction2'
 
         self.trans = trans(**kwargs)
-        self.type = type
+        self.trans_type = trans_type
 
     def __call__(self, results):
         assert 'imgs' in results
 
         assert 'gt_bboxes' not in results,\
-            f'PytorchVideo {self.type} doesn\'t support bboxes yet.'
+            f'PytorchVideo {self.trans_type} doesn\'t support bboxes yet.'
         assert 'proposals' not in results,\
-            f'PytorchVideo {self.type} doesn\'t support bboxes yet.'
+            f'PytorchVideo {self.trans_type} doesn\'t support bboxes yet.'
 
-        if self.type in ('AugMix', 'RandAugment'):
+        if self.trans_type in ('AugMix', 'RandAugment'):
             # list[ndarray(h, w, 3)] -> torch.tensor(t, c, h, w)
             imgs = [x.transpose(2, 0, 1) for x in results['imgs']]
             imgs = to_tensor(np.stack(imgs))
@@ -146,7 +146,7 @@ class PytorchVideoTrans:
 
         imgs = self.trans(imgs).data.numpy()
 
-        if self.type in ('AugMix', 'RandAugment'):
+        if self.trans_type in ('AugMix', 'RandAugment'):
             imgs[imgs > 255] = 255
             imgs[imgs < 0] = 0
             imgs = imgs.astype(np.uint8)
@@ -1959,7 +1959,7 @@ class BackgroundBlend:
 
         bg_idx = np.random.choice(self.num_bg)
         bg_img = self._open_img(self.bg_paths[bg_idx])
-        bg_img = self._augment_bg(bg_img)
+        bg_img = self._preprocess_bg(bg_img)
         alpha = self.alpha if type(self.alpha) == float else np.random.rand()
         imgs = [alpha * img + (1 - alpha) * bg_img for img in imgs]
 
@@ -1976,7 +1976,7 @@ class BackgroundBlend:
         img = mmcv.imfrombytes(img_bytes, channel_order='rgb')
         return img
 
-    def _augment_bg(self, bg_img):
+    def _preprocess_bg(self, bg_img):
         results = self.Resize1({'imgs': [bg_img]})
         results = self.CenterCrop(results)
         results = self.Resize2(results)

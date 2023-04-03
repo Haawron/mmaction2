@@ -11,6 +11,7 @@
         "slurm/logs/",
         "failure_modes_visualized/",
         "visualizations/",
+        "tools/data/kinetics/kinetics400",
     ],
 
     "defineConstant": {

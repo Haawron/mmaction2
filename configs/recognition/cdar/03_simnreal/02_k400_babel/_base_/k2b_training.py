@@ -26,4 +26,4 @@ lr_config = dict(policy='CosineAnnealing', min_lr=lr*1e-3)
 total_epochs = 50
 work_dir = './work_dirs/train_output/hello/cdar'
 load_from = './data/weights/timesformer/timesformer_8x32_224_howto100m_mmaction.pyth'
-ckpt_revise_keys = [('cls_head', 'unusedhead')]
+ckpt_revise_keys = []#[('cls_head', 'unusedhead')]

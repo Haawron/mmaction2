@@ -150,4 +150,4 @@ visualizations/
 **/*.mp4
 # mmaction tmp files
 **/*0000*
-tools/data/kinetics/kinetics400/failed
+tools/data/kinetics/kinetics400/

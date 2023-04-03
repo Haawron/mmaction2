@@ -20,6 +20,7 @@ from .loading import (ArrayDecode, AudioDecode, AudioDecodeInit,
 from .pose_loading import (GeneratePoseTarget, LoadKineticsPose,
                            PaddingWithLoop, PoseDecode, PoseNormalize,
                            UniformSampleFrames)
+from .visualizer import DebugInterPipelineVisualizer
 
 __all__ = [
     'SampleFrames', 'COPSampleFrames', 'PyAVDecode', 'DecordDecode', 'DenseSampleFrames',
@@ -37,5 +38,6 @@ __all__ = [
     'PyAVDecodeMotionVector', 'Rename', 'Imgaug', 'UniformSampleFrames',
     'PoseDecode', 'LoadKineticsPose', 'GeneratePoseTarget', 'PIMSInit',
     'PIMSDecode', 'TorchvisionTrans', 'PytorchVideoTrans', 'PoseNormalize',
-    'FormatGCNInput', 'PaddingWithLoop', 'ArrayDecode', 'JointToBone'
+    'FormatGCNInput', 'PaddingWithLoop', 'ArrayDecode', 'JointToBone',
+    'DebugInterPipelineVisualizer'
 ]

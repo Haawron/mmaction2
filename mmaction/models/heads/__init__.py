@@ -22,7 +22,8 @@ from .contrastiveda_tsm_head import ContrastiveDATSMHead
 from .contrastiveda_transformer_head import ContrastiveDATransformerHead
 from .tsm_cop_head import TSMCOPHead
 from .x3d_cop_head import X3DCOPHead
-from .timesformer_cop_head import TimeSFormerCOPHead
+# from .timesformer_cop_head import TimeSFormerCOPHead
+from .timesformer_cop_head import VCOPN
 from .dino_head import DINODAHead, TSMDINODAHead, DINOHead
 from .osbp_tsf_head import OSBPDINODAHead
 from .dann_svt_head import DANNDINODAHead
@@ -34,8 +35,10 @@ __all__ = [
     'TPNHead', 'AudioTSNHead', 'X3DHead', 'BBoxHeadAVA', 'AVARoIHead',
     'FBOHead', 'LFBInferHead', 'TRNHead', 'TimeSformerHead', 'ACRNHead',
     'STGCNHead', 'OSBPTSMHead', 'DANNTSMHead', 'ContrastiveDATSMHead', 'TSMCOPHead',
-    'X3DCOPHead', 'ContrastiveDATransformerHead', 'TimeSFormerCOPHead', 'DINODAHead',
+    'X3DCOPHead', 'ContrastiveDATransformerHead', 'DINODAHead',
     'TSMDINODAHead', 'OSBPDINODAHead', 'DANNDINODAHead', 'DINOHead', 'PlacesHead',
+    # 'TimeSFormerCOPHead',
+    'VCOPN',
 
     'IdentityHead'
 ]

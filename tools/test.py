@@ -4,7 +4,7 @@ import os
 import os.path as osp
 import warnings
 from pathlib import Path
-import csv
+import logging
 
 import mmcv
 import torch
@@ -365,13 +365,26 @@ def main():
             print(f'\nwriting results to {out}')
             dataset.dump_results(outputs, **output_config)
         if args.eval:
-            eval_res = dataset.evaluate(outputs, **eval_config)
             if args.save_eval:
-                with Path(args.out).with_suffix('.csv').open('w') as f:
-                    writer = csv.writer(f)
-                    names, vals = zip(*eval_res.items())
-                    writer.writerow(names)
-                    writer.writerow(vals)
+                logger = logging.getLogger()
+                logger.setLevel(logging.INFO)
+                p_log = Path(args.out or args.checkpoint).with_suffix('.log')
+                file_handler = logging.FileHandler(p_log)
+                logger.addHandler(file_handler)
+                eval_config['logger'] = logger
+            eval_res = dataset.evaluate(outputs, **eval_config)
+            # if args.save_eval:
+            #     with Path(args.out or args.checkpoint).with_suffix('.log').open('w') as f:
+            #         for name, val in eval_res.items():
+            #             f.write(name)
+            #             f.write('\n')
+            #             f.write(str(val))
+            #             f.write('\n\n')
+                # with Path(args.out).with_suffix('.csv').open('w') as f:
+                    # writer = csv.writer(f)
+                    # names, vals = zip(*eval_res.items())
+                    # writer.writerow(names)
+                    # writer.writerow(vals)
             for name, val in eval_res.items():
                 print(f'{name}: {val:.04f}')
 

@@ -23,7 +23,7 @@ class Recognizer3D(BaseRecognizer):
             losses.update(loss_aux)
 
         cls_score = self.cls_head(x)
-        gt_labels = labels.squeeze()
+        gt_labels = labels.squeeze(dim=1)
         loss_cls = self.cls_head.loss(cls_score, gt_labels, **kwargs)
         losses.update(loss_cls)
 

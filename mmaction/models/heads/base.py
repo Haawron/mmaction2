@@ -1,6 +1,5 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 from abc import ABCMeta, abstractmethod
-from functools import reduce, partial
 
 import torch
 import torch.nn as nn
@@ -27,16 +26,23 @@ def get_fc_block(c_in, c_out, num_layers, dropout_ratio):
 def get_fc_block_by_channels(c_in, c_out, c_mids=[], dropout_ratio=.5):
     def get_block(c_in, c_out, dropout_ratio=.5, act=True):
         fc = nn.Linear(c_in, c_out)
-        dropout = nn.Dropout(p=dropout_ratio)
+        dropout = nn.Dropout(p=dropout_ratio) if dropout_ratio > 1e-12 else nn.Identity()
         act = nn.ReLU() if act else nn.Identity()
-        return [fc, dropout, act]
-    fc_block = []
+        return nn.Sequential(fc, dropout, act)
+    fc_blocks = nn.ModuleList()
     if c_mids:
-        fc_block += reduce(partial(get_block, dropout_ratio=dropout_ratio), [c_in] + c_mids)
-        fc_block += get_block(c_mids[-1], c_out, dropout_ratio, False)
+        for i, (_c_in, _c_out) in enumerate(zip(
+            [c_in] + c_mids,
+            c_mids + [c_out]
+        )):
+            if i == len(c_mids):
+                fc_block = get_block(_c_in, _c_out, 0, False)
+            else:
+                fc_block = get_block(_c_in, _c_out, dropout_ratio, True)
+            fc_blocks.append(fc_block)
     else:
-        fc_block += get_block(c_in, c_out, dropout_ratio, False)
-    return nn.Sequential(*fc_block)
+        fc_blocks += get_block(c_in, c_out, dropout_ratio, False)
+    return nn.Sequential(*fc_blocks)
 
 
 class AvgConsensus(nn.Module):
@@ -82,18 +88,16 @@ class BaseHead(nn.Module, metaclass=ABCMeta):
                  loss_cls=dict(type='CrossEntropyLoss', loss_weight=1.0),
                  multi_class=False,
                  label_smooth_eps=0.0,
-                 topk=(1, 5), print_mca=False):
+                 topk=None, print_mca=False):
         super().__init__()
         self.num_classes = num_classes
         self.in_channels = in_channels
         self.loss_cls = build_loss(loss_cls)
         self.multi_class = multi_class
         self.label_smooth_eps = label_smooth_eps
-        assert isinstance(topk, (int, tuple))
-        if isinstance(topk, int):
-            topk = (topk, )
-        for _topk in topk:
-            assert _topk > 0, 'Top-k should be larger than 0'
+        if topk is not None:
+            if isinstance(topk, int):
+                topk = (topk,)
         self.topk = topk
         self.print_mca = print_mca
 
@@ -137,7 +141,7 @@ class BaseHead(nn.Module, metaclass=ABCMeta):
                       self.label_smooth_eps / self.num_classes)
 
         if self.print_mca:
-            mca = self.calc_mca(cls_score, labels, domains=domains)
+            mca = self.calc_mca(cls_score, labels)
             losses['mca'] = mca
 
         loss_cls = self.loss_cls(cls_score, labels, domains=domains, **kwargs)
@@ -161,11 +165,11 @@ class BaseHead(nn.Module, metaclass=ABCMeta):
             topk)
         return [torch.tensor(acc, device=cls_score.device) for acc in top_k_acc]
 
-    def calc_mca(self, cls_score, labels, domains=None):
-        if domains is not None:
-            source_idx = domains == 'source'
-            cls_score = cls_score[source_idx]
-            labels = labels[source_idx]
+    def calc_mca(self, cls_score, labels):
+        # if domains is not None:
+        #     source_idx = domains == 'source'
+        #     cls_score = cls_score[source_idx]
+        #     labels = labels[source_idx]
         mca = mean_class_accuracy(
             cls_score.detach().cpu().numpy(),
             labels.detach().cpu().numpy()
