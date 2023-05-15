@@ -5,9 +5,10 @@ from .lfb import LFB
 from .tam import TAM
 from .transformer import (DividedSpatialAttentionWithNorm,
                           DividedTemporalAttentionWithNorm, FFNWithNorm)
+from .temporal_locality_fusion import temporal_locality_fuse
 
 __all__ = [
     'Conv2plus1d', 'ConvAudio', 'LFB', 'TAM',
     'DividedSpatialAttentionWithNorm', 'DividedTemporalAttentionWithNorm',
-    'FFNWithNorm'
+    'FFNWithNorm', 'temporal_locality_fuse'
 ]

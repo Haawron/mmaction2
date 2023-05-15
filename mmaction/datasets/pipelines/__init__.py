@@ -20,6 +20,7 @@ from .loading import (ArrayDecode, AudioDecode, AudioDecodeInit,
 from .pose_loading import (GeneratePoseTarget, LoadKineticsPose,
                            PaddingWithLoop, PoseDecode, PoseNormalize,
                            UniformSampleFrames)
+from .switch import Switch
 from .visualizer import DebugInterPipelineVisualizer
 
 __all__ = [
@@ -39,5 +40,5 @@ __all__ = [
     'PoseDecode', 'LoadKineticsPose', 'GeneratePoseTarget', 'PIMSInit',
     'PIMSDecode', 'TorchvisionTrans', 'PytorchVideoTrans', 'PoseNormalize',
     'FormatGCNInput', 'PaddingWithLoop', 'ArrayDecode', 'JointToBone',
-    'DebugInterPipelineVisualizer'
+    'Switch', 'DebugInterPipelineVisualizer'
 ]

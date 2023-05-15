@@ -21,6 +21,8 @@ class Compose:
         self.transforms = []
         for transform in transforms:
             if isinstance(transform, dict):
+                if 'type' not in transform or transform['type'] == '':
+                    continue
                 if transform['type'].startswith('torchvision.'):
                     trans_type = transform.pop('type')[12:]
                     transform = TorchvisionTrans(trans_type, **transform)

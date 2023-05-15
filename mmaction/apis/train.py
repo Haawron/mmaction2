@@ -8,13 +8,13 @@ import numpy as np
 import torch
 import torch.distributed as dist
 from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
-from mmcv.runner import (DistSamplerSeedHook, EpochBasedRunner, OptimizerHook,
+from mmcv.runner import (DistSamplerSeedHook, OptimizerHook,
                          build_optimizer, get_dist_info)
 from mmcv.runner.hooks import Fp16OptimizerHook
 
 from ..core import (DistEvalHook, EvalHook, OmniSourceDistSamplerSeedHook,
                     OmniSourceRunner, DomainAdaptationDistSamplerSeedHook,
-                    DomainAdaptationRunner)
+                    EpochBasedRunnerWrapper, DomainAdaptationRunner)
 from ..datasets import build_dataloader, build_dataset
 from ..utils import PreciseBNHook, get_root_logger
 from .test import multi_gpu_test
@@ -137,7 +137,7 @@ def train_model(model,
     Runner = (
         OmniSourceRunner if cfg.omnisource
         else DomainAdaptationRunner if cfg.domain_adaptation
-        else EpochBasedRunner
+        else EpochBasedRunnerWrapper
     )
     runner = Runner(
         model,

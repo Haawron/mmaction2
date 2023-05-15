@@ -33,9 +33,15 @@ class OSBPLoss(BaseWeightedLoss):
         self.bce = torch.nn.BCELoss()
         self.loss_weight = loss_weight
 
-    def loss_adv(self, p, t:float):  # p: [B]
-        t = t * torch.ones_like(p)  # [B]
-        return self.bce(p, t)
+    def loss_adv(self, p_unk, t:float):  # p_unk: [B]
+        p_unk = p_unk.contiguous()
+        p_nk = 1. - p_unk
+
+        t_unk = t * torch.ones_like(p_unk).to(p_unk.device)  # [B]
+        t_nk = 1. - t_unk
+
+        loss = self.bce(p_unk, t_unk) + self.bce(p_nk, t_nk)  # why didn't halve? => E[X+Y]=E[X]+E[Y]
+        return loss
 
     def _forward(self, cls_score, labels, domains=None, **kwargs):
         """
@@ -51,7 +57,7 @@ class OSBPLoss(BaseWeightedLoss):
         """
         if domains is None:  # valid or test
             return {}
-        
+
         source_idx = torch.from_numpy(domains == 'source')
         target_idx = torch.logical_not(source_idx)
         assert source_idx.sum() == target_idx.sum()
@@ -74,26 +80,12 @@ class OSBPLoss(BaseWeightedLoss):
 
         # mca
         mca_source = self.calc_mca(logits_source, labels_source)
-        mca_target = self.calc_mca(logits_target, labels_target)
-        losses.update({'mca_source': mca_source, 'mca_target': mca_target})
-        # if domains is not None:  # train
-        #     source_idx = torch.from_numpy(domains == 'source')
-        #     target_idx = torch.logical_not(source_idx)
-        #     assert source_idx.sum() == target_idx.sum()
-        #     logits_source = cls_score[source_idx]
-        #     logits_target = cls_score[target_idx]
-        #     labels_source = labels[source_idx]
-        #     labels_target = labels[target_idx]
-        #     mca_source = self.calc_mca(logits_source, labels_source)
-        #     mca_target = self.calc_mca(logits_target, labels_target)
-        #     losses = {'mca_source': mca_source, 'mca_target': mca_target}
-            
-        #     prob_target = F.softmax(logits_target, dim=1)  # [B, K+1]
-        #     loss_s = self.loss_cls(logits_source[:,:-1], labels_source)
-        #     loss_t = self.loss_adv(prob_target[:,-1], self.target_domain_label)
-        # else:  # valid or test
-        #     return {}
-        #     mca = self.calc_mca(cls_score, labels)
-        #     losses = {'mca': mca}
-        # losses.update({'acc_unk': acc_unk})
+        if is_unknown_labels_target.any():
+            mca_target = self.calc_mca(
+                logits_target[~is_unknown_labels_target],
+                labels_target[~is_unknown_labels_target])
+        else:
+            mca_target = torch.empty()
+        losses.update({'mca_source': mca_source, 'mca_os*_target': mca_target})
+
         return losses

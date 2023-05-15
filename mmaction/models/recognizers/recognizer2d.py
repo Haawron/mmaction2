@@ -5,7 +5,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 import numpy as np
-from einops import rearrange, repeat
+from einops import rearrange, repeat, reduce
 
 from ..builder import RECOGNIZERS
 from .base import BaseRecognizer
@@ -19,12 +19,14 @@ class Recognizer2D(BaseRecognizer):
         """Defines the computation performed at every call when training."""
 
         assert self.with_cls_head
-        batches = imgs.shape[0]
-        imgs = imgs.reshape((-1, ) + imgs.shape[2:])
-        num_segs = imgs.shape[0] // batches
+        if imgs.dim() == 6:
+            B, N, C, T, H, W = imgs.shape
+            imgs = rearrange(imgs, 'b n c t h w -> (b n t) c h w').contiguous()
+        elif imgs.dim() == 5:
+            B, NT, C, H, W = imgs.shape
+            imgs = rearrange(imgs, 'b nt c h w -> (b nt) c h w').contiguous()
 
         losses = dict()
-
         x = self.extract_feat(imgs)
 
         if self.backbone_from in ['torchvision', 'timm']:
@@ -35,28 +37,28 @@ class Recognizer2D(BaseRecognizer):
             x = x.reshape(x.shape + (1, 1))
 
         if self.with_neck:
-            x = [
-                each.reshape((-1, num_segs) +
-                             each.shape[1:]).transpose(1, 2).contiguous()
-                for each in x
-            ]
-            x, loss_aux = self.neck(x, labels.squeeze())
-            x = x.squeeze(2)
-            num_segs = 1
-            losses.update(loss_aux)
+            vertebrae = self.neck
+            if not isinstance(vertebrae, Iterable):
+                vertebrae = [vertebrae]
+            for vertebra in vertebrae:
+                x, loss_aux = vertebra(x, labels.squeeze(dim=1), train=True, **kwargs)
+                losses.update(loss_aux)
 
-        cls_score = self.cls_head(x, num_segs)
-        gt_labels = labels.squeeze()
-        loss_cls = self.cls_head.loss(cls_score, gt_labels, **kwargs)
+        cls_score = self.cls_head(x, None, train=True, **kwargs)
+        gt_labels = labels.squeeze(dim=1)
+        loss_cls = self.cls_head.loss(cls_score, gt_labels, train=True, **kwargs)
         losses.update(loss_cls)
         return losses
 
     def _do_test(self, imgs):
         """Defines the computation performed at every call when evaluation,
         testing and gradcam."""
-        batches = imgs.shape[0]
-        imgs = imgs.reshape((-1, ) + imgs.shape[2:])
-        num_segs = imgs.shape[0] // batches
+        if imgs.dim() == 6:
+            B, N, C, T, H, W = imgs.shape
+            imgs = rearrange(imgs, 'b n c t h w -> (b n t) c h w').contiguous()
+        elif imgs.dim() == 5:
+            B, NT, C, H, W = imgs.shape
+            imgs = rearrange(imgs, 'b nt c h w -> (b nt) c h w').contiguous()
 
         x = self.extract_feat(imgs)
 
@@ -68,21 +70,19 @@ class Recognizer2D(BaseRecognizer):
             x = x.reshape(x.shape + (1, 1))
 
         if self.with_neck:
-            x = [
-                each.reshape((-1, num_segs) +
-                             each.shape[1:]).transpose(1, 2).contiguous()
-                for each in x
-            ]
-            x, _ = self.neck(x)
-            x = x.squeeze(2)
-            num_segs = 1
+            if self.with_neck:
+                vertebrae = self.neck
+                if not isinstance(vertebrae, Iterable):
+                    vertebrae = [vertebrae]
+                for vertebra in vertebrae:
+                    x, _ = vertebra(x, None)
 
         if self.feature_extraction:
             # perform spatial pooling
             avg_pool = nn.AdaptiveAvgPool2d(1)
             x = avg_pool(x)
             # squeeze dimensions
-            x = x.reshape((batches, num_segs, -1))
+            x = x.reshape((B, T, -1))
             # temporal average pooling
             x = x.mean(axis=1)
             return x
@@ -96,12 +96,12 @@ class Recognizer2D(BaseRecognizer):
         #   4) `num_clips` in `SampleFrames` or its subclass if `clip_len != 1`
 
         # should have cls_head if not extracting features
-        cls_score = self.cls_head(x, num_segs)
+        cls_score = self.cls_head(x, None)
 
-        assert cls_score.size()[0] % batches == 0
+        assert cls_score.size()[0] % B == 0
         # calculate num_crops automatically
         cls_score = self.average_clip(cls_score,
-                                      cls_score.size()[0] // batches)
+                                      cls_score.size()[0] // B)
         return cls_score
 
     def _do_fcn_test(self, imgs):
@@ -236,26 +236,17 @@ class DARecognizer2D(Recognizer2D):
         # X = 2B*2*T, 2B*2*N*T, 2B*T, 2B*N*T
         x = self.extract_feat(imgs)  # [X, C_feat, 7, 7]
 
-        if self.backbone_from in ['torchvision', 'timm']:
-            if len(x.shape) == 4 and (x.shape[2] > 1 or x.shape[3] > 1):
-                # apply adaptive avg pooling
-                x = nn.AdaptiveAvgPool2d(1)(x)
-            x = x.reshape((x.shape[0], -1))
-            x = x.reshape(x.shape + (1, 1))
-
         if self.with_neck:
             vertebrae = self.neck
             if not isinstance(vertebrae, Iterable):
                 vertebrae = [vertebrae]
             for vertebra in vertebrae:
-                x, loss_aux = vertebra(x, labels, domains=domains, **kwargs)
+                x, loss_aux = vertebra(x, labels, domains=domains, train=True, **kwargs)
                 losses.update(loss_aux)
 
-        cls_score = self.cls_head(x, None, domains)  # [2B(*2)(*N)(*T), 1~3, C, 7, 7]
-        # if self.N is not None:
-        #     cls_score = cls_score.reshape(-1, self.N, *cls_score.shape[-2:])
+        cls_score = self.cls_head(x, None, domains, train=True)  # [2B(*2)(*N)(*T), 1~3, C, 7, 7]
 
-        loss_cls = self.cls_head.loss(cls_score, labels, domains, **kwargs)
+        loss_cls = self.cls_head.loss(cls_score, labels, domains, train=True, **kwargs)
         losses.update(loss_cls)
 
         return losses
@@ -285,7 +276,10 @@ class DARecognizer2D(Recognizer2D):
             labels = data_batches['label']
             domains = torch.ones_like(imgs)
         else:
-            imgs = torch.concat([data_batch['imgs'] for data_batch in data_batches])
+            imgs_source, imgs_target = data_batches[0]['imgs'], data_batches[1]['imgs']
+            if imgs_source.shape != imgs_target.shape:
+                imgs_target = rearrange(imgs_target, 'b n c t h w -> b t c n h w')
+            imgs = torch.concat([imgs_source, imgs_target])
             labels = torch.concat([data_batch['label'] for data_batch in data_batches])
             domains = np.array([
                 [domain]*data_batch['imgs'].shape[0] for domain, data_batch in zip(domains, data_batches)
@@ -311,7 +305,6 @@ class DARecognizer2D(Recognizer2D):
     def _do_test(self, imgs, domains):
         """Defines the computation performed at every call when evaluation,
         testing and gradcam."""
-
         # [B, N, C, T, H, W] or [B, T, C, H, W]
         if imgs.dim() == 6:
             B, N, C, T, H, W = imgs.shape
@@ -321,7 +314,7 @@ class DARecognizer2D(Recognizer2D):
         imgs = imgs.reshape(-1, *imgs.shape[-3:])
 
         # X = BNT or BT
-        x = self.extract_feat(imgs)  # [X, C_feat, 7, 7]
+        x = self.extract_feat(imgs.contiguous())  # [X, C_feat, 7, 7]
 
         if self.backbone_from in ['torchvision', 'timm']:
             if len(x.shape) == 4 and (x.shape[2] > 1 or x.shape[3] > 1):
@@ -344,7 +337,18 @@ class DARecognizer2D(Recognizer2D):
             x = x.mean(axis=1)  # [*, C_feat]
             return x
 
+        if N > 1 and T > 1:
+            if N == self.cls_head.num_segments:
+                print(x.shape)
+                x = rearrange(x, '(b n t) c h w -> (b t n) c h w', n=N, t=T).contiguous()
+
         cls_score = self.cls_head(x, None, domains)
+
+        if N > 1 and T > 1:
+            if N == self.cls_head.num_segments:
+                print(cls_score.shape)
+                cls_score = reduce(cls_score, '(b t) k -> b k', 'mean', t=T)
+
         # Shapes (N.B. ignore num_crops)
             # Vanilla:      [N, K]          (Not here, just for notice)
             # DANN: list of [N, K], [N, 1]
@@ -357,6 +361,43 @@ class DARecognizer2D(Recognizer2D):
             cls_score = cls_score[:,0]  # [N, n_feat]
 
         return self.get_prob(cls_score)
+
+    def forward_dummy(self, imgs, softmax=False, **kwargs):
+        """Used for computing network FLOPs.
+
+        See ``tools/analysis/get_flops.py``.
+
+        Args:
+            imgs (torch.Tensor): Input images.
+
+        Returns:
+            Tensor: Class score.
+        """
+        assert self.with_cls_head
+        if imgs.dim() == 5:
+            # [B x T=1, N, C, H, W] -> [2B x N x T=1, C, H, W]
+            imgs = repeat(imgs, '(b t) n c h w -> (2 b n t) c h w', t=1).contiguous()
+        elif imgs.dim() == 6:
+            # [B, N, C, T, H, W] -> [2B x N x T, C, H, W]
+            imgs = repeat(imgs, 'b n c t h w -> (2 b n t) c h w').contiguous()
+
+        x = self.extract_feat(imgs)
+
+        domains = np.array(['source', 'target'])
+        labels = torch.zeros(2).type(torch.LongTensor).to(x.device)
+
+        if self.with_neck:
+            vertebrae = self.neck
+            if not isinstance(vertebrae, Iterable):
+                vertebrae = [vertebrae]
+            for vertebra in vertebrae:
+                x, _ = vertebra(x, labels, domains=domains, **kwargs)
+
+        cls_score = self.cls_head(x, None, domains)
+        _ = self.cls_head.loss(cls_score, labels, domains, **kwargs)
+        if softmax:
+            cls_score = nn.functional.softmax(cls_score)
+        return (cls_score, )
 
     def get_prob(self, cls_score):
         # validate `average_clips`
@@ -381,3 +422,9 @@ class DARecognizer2D(Recognizer2D):
                 return cls_score  # [N, K] or [N, K+1]
             elif average_clips == 'prob':
                 return F.softmax(cls_score, dim=1)  # [N, K] or [N, K+1]
+
+    def forward_gradcam(self, imgs, domains=None):
+        """Defines the computation performed at every call when using gradcam
+        utils."""
+        assert self.with_cls_head
+        return self._do_test(imgs, domains=None)

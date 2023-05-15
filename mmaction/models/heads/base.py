@@ -165,14 +165,11 @@ class BaseHead(nn.Module, metaclass=ABCMeta):
             topk)
         return [torch.tensor(acc, device=cls_score.device) for acc in top_k_acc]
 
-    def calc_mca(self, cls_score, labels):
-        # if domains is not None:
-        #     source_idx = domains == 'source'
-        #     cls_score = cls_score[source_idx]
-        #     labels = labels[source_idx]
+    def calc_mca(self, cls_score, labels, max_label=-1):
         mca = mean_class_accuracy(
             cls_score.detach().cpu().numpy(),
-            labels.detach().cpu().numpy()
+            labels.detach().cpu().numpy(),
+            max_label=max_label
         )
         return torch.tensor(mca, device=cls_score.device)
 

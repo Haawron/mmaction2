@@ -52,6 +52,8 @@ for p_pkl in p.rglob('best_pred.pkl'):
     order, task = task.split('_', 1)
     orders['task'][task] = str(order)  # will be sorted by dictionary order rather than arithmetic order
     order, subtask = subtask.split('_', 1)
+    if 'closed' in subtask:
+        continue
     orders['subtask'][subtask] = str(order)
     order, model = model.split('_', 1)
     orders['model'][model] = str(order)

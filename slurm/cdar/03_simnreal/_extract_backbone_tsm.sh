@@ -9,7 +9,7 @@ echo "$workdir"
 
 backbone_extractor_config='configs/recognition/cdar/03_simnreal/021_closed_k400_babel/01_tsm/_extact_backbone.py'
 backbone_outfile="$workdir/backbone.pkl"
-backbone_ckpt="$(find "$workdir" -name 'best*.pth' -type f)"
+backbone_ckpt="$(find "$workdir" -name 'best*.pth' -type f | head -1)"
 
 echo -e "$backbone_ckpt" '\n-->' "$backbone_outfile"
 

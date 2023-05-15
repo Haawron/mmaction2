@@ -62,12 +62,12 @@ class VCOPN(nn.Module):
         if self.backbone == 'TSM':
             ff = reduce(
                 f, '(bb n t) c h w -> bb n c', 'mean',
-                n=self.num_clips, t=self.num_segments)
+                n=self.num_clips, t=self.num_segments).contiguous()
             f_out = reduce(
                 f, '(bb n t) c h w -> (bb t) c h w', 'mean',
-                n=self.num_clips, t=self.num_segments)  # [2B x T, n_feat, H, W]
+                n=self.num_clips, t=self.num_segments).contiguous()  # [2B x T, n_feat, H, W]
         else:
-            ff = rearrange(f, '(bb n) c -> bb n c', n=self.num_clips)  # [2B, N, n_feat]
+            ff = rearrange(f, '(bb n) c -> bb n c', n=self.num_clips).contiguous()  # [2B, N, n_feat]
             f_out = ff.mean(dim=1)  # [2B, n_feat]
 
         cop_labels = torch.randint(self.num_possible_permutations, size=(ff.shape[0],), device=f.device)  # [2B]

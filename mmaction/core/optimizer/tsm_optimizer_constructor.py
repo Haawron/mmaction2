@@ -64,8 +64,11 @@ class TSMOptimizerConstructor(DefaultOptimizerConstructor):
                         bn.append(param)
             elif len(m._modules) == 0:
                 if len(list(m.parameters())) > 0:
-                    raise ValueError(f'New atomic module type: {type(m)}. '
-                                     'Need to give it a learning policy')
+                    for name, param in m.named_parameters():
+                        if 'prototype' in name:
+                            normal_weight.append(param)
+                    # raise ValueError(f'New atomic module type: {type(m)}. '
+                    #                  'Need to give it a learning policy')
 
         # pop the cls_head fc layer params
         last_fc_weight = normal_weight.pop()

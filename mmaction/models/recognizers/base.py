@@ -308,7 +308,7 @@ class BaseRecognizer(nn.Module, metaclass=ABCMeta):
             assert item in data_batch
             aux_info[item] = data_batch[item]
 
-        losses = self(imgs, label, return_loss=True, **aux_info)
+        losses = self(imgs, label, return_loss=True, **aux_info, **kwargs)
 
         loss, log_vars = self._parse_losses(losses)
 

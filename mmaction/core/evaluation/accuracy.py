@@ -74,7 +74,7 @@ def confusion_matrix(y_pred, y_real, normalize=None, max_label=-1):
     return confusion_mat
 
 
-def mean_class_accuracy(scores, labels):
+def mean_class_accuracy(scores, labels, max_label=-1):
     """Calculate mean class accuracy.
 
     Args:
@@ -85,7 +85,7 @@ def mean_class_accuracy(scores, labels):
         np.ndarray: Mean class accuracy.
     """
     pred = np.argmax(scores, axis=1)
-    cf_mat = confusion_matrix(pred, labels).astype(float)
+    cf_mat = confusion_matrix(pred, labels, max_label=max_label).astype(float)
 
     cls_cnt = cf_mat.sum(axis=1)
     cls_hit = np.diag(cf_mat)

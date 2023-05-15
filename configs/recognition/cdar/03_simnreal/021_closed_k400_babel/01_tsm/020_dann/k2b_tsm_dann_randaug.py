@@ -68,8 +68,8 @@ dataset_settings = dict(
         test=dict(
             **datasets['K400'],
             test_mode=True,
-            data_prefix='/local_datasets/kinetics400/videos/train',
-            ann_file='data/_filelists/k400/processed/filelist_k400_train_closed.txt')),
+            data_prefix='/local_datasets/kinetics400/videos/val',
+            ann_file='data/_filelists/k400/processed/filelist_k400_test_closed.txt')),
     target=dict(
         train=dict(
             **datasets['BABEL'],
@@ -79,12 +79,12 @@ dataset_settings = dict(
             **datasets['BABEL'],
             test_mode=True,
             data_prefix='/local_datasets/babel',
-            ann_file='data/_filelists/babel/processed/filelist_babel_test_merged_closed.txt'),
+            ann_file='data/_filelists/babel/processed/filelist_babel_val_closed.txt'),
         test=dict(
             **datasets['BABEL'],
             test_mode=True,
             data_prefix='/local_datasets/babel',
-            ann_file='data/_filelists/babel/processed/filelist_babel_train_closed.txt')))
+            ann_file='data/_filelists/babel/processed/filelist_babel_test_closed.txt')))
 
 img_norm_cfg = dict(
     mean=[127.5, 127.5, 127.5], std=[127.5, 127.5, 127.5], to_bgr=False)
@@ -94,7 +94,7 @@ pipelines = dict(
     source=dict(
         train=[
             dict(type='DecordInit'),
-            dict(type='SampleFrames', clip_len=1, frame_interval=1, num_clips=8),
+            dict(type='SampleFrames', clip_len=8, frame_interval=32, num_clips=1),
             dict(type='DecordDecode'),
 
             dict(type='PytorchVideoTrans', trans_type='RandAugment'),
@@ -106,17 +106,6 @@ pipelines = dict(
             dict(type='Collect', keys=['imgs', 'label'], meta_keys=[]),
             dict(type='ToTensor', keys=['imgs', 'label'])
         ],
-        test=[
-            dict(type='DecordInit'),
-            dict(type='SampleFrames', clip_len=1, frame_interval=1, num_clips=8, test_mode=True),
-            dict(type='DecordDecode'),
-            dict(type='Resize', scale=(-1, 256)),
-            dict(type='CenterCrop', crop_size=224),
-            dict(type='Normalize', **img_norm_cfg),
-            dict(type='FormatShape', input_format='NCTHW'),
-            dict(type='Collect', keys=['imgs', 'label'], meta_keys=[]),
-            dict(type='ToTensor', keys=['imgs', 'label'])
-        ]
     ),
     target=dict(
         train=[
@@ -190,4 +179,4 @@ optimizer_config = dict(
 lr_config = dict(policy='step', step=[20, 40])
 total_epochs = 50
 work_dir = './work_dirs/train_output/hello/cdar/tsm'
-load_from = 'work_dirs/train_output/cdar/03_simnreal/021_closed_k400_babel/01_tsm/010_source_only/default/randaug/34829__k2b-tsm-randaug/2/20230401-144129/best_mean_class_accuracy_epoch_15.pth'
+load_from = 'work_dirs/train_output/cdar/03_simnreal/021_closed_k400_babel/01_tsm/010_source_only/randaug/default/37301__closed_k2b-tsm/1/20230414-171532/best_mean_class_accuracy_epoch_40.pth'

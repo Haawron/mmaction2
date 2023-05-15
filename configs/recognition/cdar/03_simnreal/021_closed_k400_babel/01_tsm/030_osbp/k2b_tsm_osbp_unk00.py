@@ -90,7 +90,7 @@ pipelines = dict(
     source=dict(
         train=[
             dict(type='DecordInit'),
-            dict(type='SampleFrames', clip_len=8, frame_interval=32, num_clips=1),
+            dict(type='SampleFrames', clip_len=1, frame_interval=1, num_clips=8),
             dict(type='DecordDecode'),
 
             dict(type='PytorchVideoTrans', trans_type='RandAugment'),
@@ -104,7 +104,7 @@ pipelines = dict(
         ],
         test=[
             dict(type='DecordInit'),
-            dict(type='SampleFrames', clip_len=8, frame_interval=32, num_clips=1, test_mode=True),
+            dict(type='SampleFrames', clip_len=1, frame_interval=1, num_clips=8, test_mode=True),
             dict(type='DecordDecode'),
             dict(type='Resize', scale=(-1, 256)),
             dict(type='CenterCrop', crop_size=224),
@@ -116,7 +116,7 @@ pipelines = dict(
     ),
     target=dict(
         train=[
-            dict(type='SampleFrames', clip_len=8, frame_interval=32, num_clips=1),
+            dict(type='SampleFrames', clip_len=1, frame_interval=1, num_clips=8),
             dict(type='RawFrameDecode'),
 
             dict(type='PytorchVideoTrans', trans_type='RandAugment'),
@@ -129,7 +129,7 @@ pipelines = dict(
             dict(type='ToTensor', keys=['imgs', 'label'])
         ],
         valtest=[
-            dict(type='SampleFrames', clip_len=8, frame_interval=32, num_clips=1, test_mode=True),
+            dict(type='SampleFrames', clip_len=1, frame_interval=1, num_clips=8, test_mode=True),
             dict(type='RawFrameDecode'),
             dict(type='Resize', scale=(-1, 256)),
             dict(type='CenterCrop', crop_size=224),

@@ -629,7 +629,7 @@ class RandomCrop:
                                    'with lazy == True')
 
         img_h, img_w = results['img_shape']
-        assert self.size <= img_h and self.size <= img_w
+        assert self.size <= img_h and self.size <= img_w, f'{img_h}, {img_w}'
 
         y_offset = 0
         x_offset = 0
@@ -1507,7 +1507,8 @@ class ColorJitter:
         img = cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
         return img.astype(np.float32)
 
-    def __init__(self, brightness=0.5, contrast=0.5, saturation=0.5, hue=0.1):
+    def __init__(self, p=1., brightness=0.5, contrast=0.5, saturation=0.5, hue=0.1):
+        self.p = p  # to apply
         self.brightness = self.check_input(brightness, 1, 1)
         self.contrast = self.check_input(contrast, 1, 1)
         self.saturation = self.check_input(saturation, 1, 1)
@@ -1515,6 +1516,9 @@ class ColorJitter:
         self.fn_idx = np.random.permutation(4)
 
     def __call__(self, results):
+        if np.random.rand() > self.p:
+            return results
+
         imgs = results['imgs']
         num_clips, clip_len = 1, len(imgs)
 
@@ -1933,21 +1937,30 @@ class BackgroundBlend:
 
         self.p = p
 
-        self.ann_files = list(map(Path, ann_files))
         self.data_prefixes = list(map(Path, data_prefixes))
         self.alpha = alpha
         self.blend_label = blend_label
-        assert all(ann_file.is_file() for ann_file in self.ann_files)
+        self.ann_files = ann_files
+        if self.ann_files:
+            self.ann_files = list(map(Path, self.ann_files))
+            assert all(ann_file.is_file() for ann_file in self.ann_files)
         assert all(data_prefix.is_dir() for data_prefix in self.data_prefixes)
         assert 0 <= self.alpha <= 1 if type(self.alpha) == float else self.alpha == 'random'
 
         self.bg_paths = []
         self.bg_labels = []
-        for data_prefix, ann_file in zip(self.data_prefixes, self.ann_files):
-            with ann_file.open('r') as f:
-                ann = list(csv.reader(f, delimiter=' '))
-            self.bg_paths += [(data_prefix / line[0]).with_suffix('.jpg') for line in ann]
-            self.bg_labels += [int(line[-1]) for line in ann]
+
+        if self.ann_files:
+            for data_prefix, ann_file in zip(self.data_prefixes, self.ann_files):
+                with ann_file.open('r') as f:
+                    ann = list(csv.reader(f, delimiter=' '))
+                self.bg_paths += [(data_prefix / line[0]).with_suffix('.jpg') for line in ann]
+                if self.blend_label:
+                    self.bg_labels += [int(line[-1]) for line in ann]
+        else:
+            assert not self.blend_label
+            for data_prefix in self.data_prefixes:
+                self.bg_paths += list(data_prefix.glob('**/*.jpg'))
         self.num_bg = len(self.bg_paths)
 
     def __call__(self, results):
@@ -1957,18 +1970,39 @@ class BackgroundBlend:
         imgs = results['imgs']  # list(T) of imgs(HxWxC)
         imgs = [img.astype(np.float32) for img in imgs]
 
-        bg_idx = np.random.choice(self.num_bg)
-        bg_img = self._open_img(self.bg_paths[bg_idx])
+        count_try = 0
+        while True:
+            bg_idx = np.random.choice(self.num_bg)
+            bg_path = self.bg_paths[bg_idx]
+            try:
+                count_try += 1
+                bg_img = self._open_img(bg_path)
+            except (cv2.error, EOFError) as e:  # if empty
+                print(f'BG file open failed for {count_try} times')
+                print(bg_path)
+                print(e)
+            else:
+                break
         bg_img = self._preprocess_bg(bg_img)
         alpha = self.alpha if type(self.alpha) == float else np.random.rand()
         imgs = [alpha * img + (1 - alpha) * bg_img for img in imgs]
 
         imgs = [img.astype(np.uint8) for img in imgs]  # 혹시 몰라서 원복
         results['imgs'] = imgs
+        results['bg_img'] = str(bg_path).replace('/local_datasets', './data')
         if self.blend_label:
             bg_label = self.bg_labels[bg_idx]
             results['label'] = self.alpha * results['label'] + (1 - self.alpha) * bg_label
         return results
+
+    def __repr__(self):
+        format_string = f'{self.__class__.__name__}\n'
+        format_string += f'    alpha: {self.alpha},\n'
+        format_string += f'    p: {self.p},\n'
+        format_string += f'    ann_files: {self.ann_files},\n' if self.ann_files else ''
+        format_string += f'    blend_label: {self.blend_label},\n'
+        format_string += f'    # BGs: {self.num_bg},\n'
+        format_string += f'    Prefixes: {self.data_prefixes},\n'
 
     def _open_img(self, path):
         path = str(path)

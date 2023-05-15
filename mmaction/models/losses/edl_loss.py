@@ -145,17 +145,14 @@ class EvidenceLoss(BaseWeightedLoss):
             losses.update({'loss_avu': avu_loss})
         return losses
 
-    def compute_annealing_coef(self, **kwargs):
-        assert 'epoch' in kwargs, "epoch number is missing!"
-        assert 'total_epoch' in kwargs, "total epoch number is missing!"
-        epoch_num, total_epoch = kwargs['epoch'], kwargs['total_epoch']
+    def compute_annealing_coef(self, cur_epoch, total_epoch, **kwargs):
         # annealing coefficient
         if self.annealing_method == 'step':
             annealing_coef = torch.min(torch.tensor(
-                1.0, dtype=torch.float32), torch.tensor(epoch_num / self.annealing_step, dtype=torch.float32))
+                1.0, dtype=torch.float32), torch.tensor(cur_epoch / self.annealing_step, dtype=torch.float32))
         elif self.annealing_method == 'exp':
             annealing_start = torch.tensor(self.annealing_start, dtype=torch.float32)
-            annealing_coef = annealing_start * torch.exp(-torch.log(annealing_start) / total_epoch * epoch_num)
+            annealing_coef = annealing_start * torch.exp(-torch.log(annealing_start) / total_epoch * cur_epoch)
         else:
             raise NotImplementedError
         return annealing_coef

@@ -44,6 +44,46 @@ labelmaps = {
         'walk',             # 11
         'unk',
     ],
+
+    'k400': [
+        'jump',             # 0
+        'run',              # 1
+        'throw',            # 2
+        'kick',             # 3
+        'bend',             # 4
+        'dance',            # 5
+        'clean_something',  # 6
+        'squat',            # 7
+        'punch',            # 8
+        'crawl',            # 9
+        'clap',             # 10
+        'pick_up',          # 11
+    ],
+
+    'babel': [
+        'jump',             # 0
+        'run',              # 1
+        'throw',            # 2
+        'kick',             # 3
+        'bend',             # 4
+        'dance',            # 5
+        'clean_something',  # 6
+        'squat',            # 7
+        'punch',            # 8
+        'crawl',            # 9
+        'clap',             # 10
+        'pick_up',          # 11
+
+        'walk',             # 12
+        'turn',             # 13
+        'step',             # 14
+        'sit down',         # 15
+        'stand up',         # 16
+        'wave',             # 17
+        'place',            # 18
+        'catch',            # 19
+    ],
 }
 
 labelmaps['hmdb'] = labelmaps['ucf']
+labelmaps['kinetics400'] = labelmaps['k400']

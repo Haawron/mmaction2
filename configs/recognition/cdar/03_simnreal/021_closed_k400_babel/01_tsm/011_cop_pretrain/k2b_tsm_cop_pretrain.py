@@ -26,14 +26,7 @@ model = dict(
         num_clips=3,
         backbone='TSM', num_segments=8),
     cls_head=dict(
-        type='TSMHead',
-        num_classes=num_classes,
-        num_segments=8,
-        in_channels=2048,
-        spatial_type='avg',
-        consensus=dict(type='AvgConsensus', dim=1),
-        dropout_ratio=0.5,
-        is_shift=True),
+        type='IdentityHead'),
     test_cfg=dict(average_clips='score'))
 
 #####################################################################################################################
@@ -85,7 +78,8 @@ pipelines = dict(
     source=dict(
         train=[
             dict(type='DecordInit'),
-            dict(type='COPSampleFrames', clip_len=8, num_clips=3, clip_interval=16),
+            # dict(type='COPSampleFrames', clip_len=8, num_clips=3, clip_interval=16),
+            dict(type='SampleFrames', clip_len=8, frame_interval=2, num_clips=3),
             dict(type='DecordDecode'),
 
             dict(type='PytorchVideoTrans', trans_type='RandAugment'),
@@ -100,7 +94,8 @@ pipelines = dict(
     ),
     target=dict(
         train=[
-            dict(type='COPSampleFrames', clip_len=8, num_clips=3),
+            # dict(type='COPSampleFrames', clip_len=8, num_clips=3, clip_interval=1),
+            dict(type='SampleFrames', clip_len=8, frame_interval=1, num_clips=3),
             dict(type='RawFrameDecode'),
 
             dict(type='PytorchVideoTrans', trans_type='RandAugment'),
@@ -113,7 +108,7 @@ pipelines = dict(
             dict(type='ToTensor', keys=['imgs', 'label'])
         ],
         valtest=[
-            dict(type='SampleFrames', clip_len=8, frame_interval=32, num_clips=1, test_mode=True),
+            dict(type='SampleFrames', clip_len=1, frame_interval=1, num_clips=8, test_mode=True),
             dict(type='RawFrameDecode'),
             dict(type='Resize', scale=(-1, 256)),
             dict(type='CenterCrop', crop_size=224),
@@ -126,7 +121,7 @@ pipelines = dict(
 )
 data = dict(
     videos_per_gpu=4,
-    workers_per_gpu=4,
+    workers_per_gpu=12,
     val_dataloader=dict(videos_per_gpu=40),
     train=[
         dict(
@@ -163,12 +158,12 @@ optimizer = dict(
     weight_decay=1e-4)
 optimizer_config = dict(
     type='GradientCumulativeOptimizerHook',
-    cumulative_iters=64,
+    cumulative_iters=48,
     grad_clip=dict(max_norm=40, norm_type=2))
 
 # learning policy
-lr_config = dict(policy='step', step=[20, 40])
-total_epochs = 50
+total_epochs = 500
+lr_config = dict(policy='step', step=[int(total_epochs*.4), int(total_epochs*.8)])
 work_dir = './work_dirs/train_output/hello/cdar/tsm'
 load_from = 'https://download.openmmlab.com/mmaction/recognition/tsm/tsm_r50_1x1x8_100e_kinetics400_rgb/tsm_r50_1x1x8_100e_kinetics400_rgb_20210701-7ff22268.pth'
 ckpt_revise_keys = []#[('cls_head', 'unusedhead')]

@@ -10,12 +10,12 @@ from .ohem_hinge_loss import OHEMHingeLoss
 from .ssn_loss import SSNLoss
 from .osbp_loss import OSBPLoss
 from .dann_loss import DANNClassifierLoss, DANNDomainLoss, DANNLoss
-from .semisupervised_contrastive_loss import SemisupervisedContrastiveLoss
+from .semisupervised_contrastive_loss import SemisupervisedContrastiveLoss, SupConLoss
 from .edl_loss import EvidenceLoss
 
 __all__ = [
     'BaseWeightedLoss', 'CrossEntropyLoss', 'NLLLoss', 'BCELossWithLogits',
     'BinaryLogisticRegressionLoss', 'BMNLoss', 'OHEMHingeLoss', 'SSNLoss',
     'HVULoss', 'CBFocalLoss', 'OSBPLoss', 'DANNClassifierLoss', 'DANNDomainLoss', 'DANNLoss',
-    'SemisupervisedContrastiveLoss', 'EvidenceLoss',
+    'SemisupervisedContrastiveLoss', 'SupConLoss', 'EvidenceLoss',
 ]

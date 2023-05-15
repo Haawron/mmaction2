@@ -244,7 +244,7 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
                 print_log(log_msg, logger=logger)
                 continue
 
-            if metric == 'H_mean_class_accuracy':  # only valid for UNK
+            if metric == 'H_mean_class_accuracy':  # only valid for open-set
                 pred = np.argmax(results, axis=1)
                 cf_mat = confusion_matrix(pred, gt_labels)
                 cls_cnt = cf_mat.sum(axis=1)
@@ -255,7 +255,9 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
                 eval_results['H_mean_class_accuracy'] = H_mean_acc
                 eval_results['os*'] = os_star
                 eval_results['recall_unknown'] = unk
-                log_msg = f'\nH_mean_acc\t{H_mean_acc:.4f} (OS* {os_star:.4f}, UNK: {unk:.4f})'
+                log_msg = f'\nH\t\t{H_mean_acc:.4f}'
+                log_msg += f'\nOS*\t\t{os_star:.4f}'
+                log_msg += f'\nUNK\t\t{unk:.4f}'
                 print_log(log_msg, logger=logger)
                 continue
 
@@ -296,9 +298,9 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
                 with np.printoptions(threshold=np.inf, linewidth=np.inf):  # thres: # elems, width: # chars
                     s += 'Confusion matrix\n'
                     s += str(conf) + '\n\n'
-                with np.printoptions(threshold=np.inf, linewidth=np.inf, precision=0, suppress=True):
+                with np.printoptions(threshold=np.inf, linewidth=np.inf, suppress=True):
                     s += 'Normalized Confusion matrix\n'
-                    s += str(100*conf_normed) + '\n'
+                    s += str((100*conf_normed).astype(int)) + '\n'
                 if 'SRUN_DEBUG' in os.environ:  # if in srun(debuging) session
                     for start, end in reversed([(m.start(0), m.end(0)) for i, m in enumerate(re.finditer(r'\d+', str(s))) if i%h == i//w]):
                         s = s[:start] + '\033[1m' + s[start:end] + '\033[0m' + s[end:]  # diag vals to be bold
@@ -502,7 +504,7 @@ class BaseDataset(Dataset, metaclass=ABCMeta):
                 eval_results['gcd_v2_cheated_balanced_old'] = mca_old
                 eval_results['gcd_v2_cheated_balanced_new'] = mca_new
                 print_log(log_msg, logger=logger)
-                continue 
+                continue
 
         return eval_results
 

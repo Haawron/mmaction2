@@ -57,7 +57,7 @@ class OSBP(nn.Module):
             # TSM: [2B x N=8 x T=1, n_feat, H, W]
             # TimeSformer: [2B x N=1, n_feat=768]
         if self.backbone == 'TSM':
-            ff = reduce(f, '(bb n t) c h w -> bb c', 'mean', n=self.num_segments, t=1)
+            ff = reduce(f, '(bb n t) c h w -> bb c', 'mean', n=self.num_segments, t=1).contiguous()
         else:
             ff = f
 
