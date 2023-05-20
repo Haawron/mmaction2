@@ -225,7 +225,7 @@ class DARecognizer2D(Recognizer2D):
                 imgs = rearrange(imgs, 'bb n c t h w -> (bb n t) c h w')
         # imgs: [_, C, H, W]
         labels = labels.squeeze(dim=1)  # [2B] or [2B*2]
-        return imgs, labels, domains
+        return imgs.contiguous(), labels, domains
 
     def forward_train(self, imgs, labels, domains, **kwargs):
         assert self.with_cls_head
@@ -306,12 +306,17 @@ class DARecognizer2D(Recognizer2D):
         """Defines the computation performed at every call when evaluation,
         testing and gradcam."""
         # [B, N, C, T, H, W] or [B, T, C, H, W]
-        if imgs.dim() == 6:
-            B, N, C, T, H, W = imgs.shape
-            imgs = imgs.transpose(2, 3)  # [B, N, T, C, H, W]
-        elif imgs.dim() == 5:
-            B, T, C, H, W = imgs.shape
-        imgs = imgs.reshape(-1, *imgs.shape[-3:])
+        # if imgs.dim() == 6:
+        #     B, N, C, T, H, W = imgs.shape
+        #     imgs = imgs.transpose(2, 3)  # [B, N, T, C, H, W]
+        # elif imgs.dim() == 5:
+        #     B, T, C, H, W = imgs.shape
+        # imgs = imgs.reshape(-1, *imgs.shape[-3:])
+        if imgs.dim() == 5:  # NCHW, [2B x N=1, T, C, H, W]
+            pass
+        elif imgs.dim() == 6:
+            # [2B, N=3, C, T, H, W] -> [2B x N=3 x T, C, H, W]
+            imgs = rearrange(imgs, 'bb n c t h w -> (bb n t) c h w').contiguous()
 
         # X = BNT or BT
         x = self.extract_feat(imgs.contiguous())  # [X, C_feat, 7, 7]
@@ -337,17 +342,17 @@ class DARecognizer2D(Recognizer2D):
             x = x.mean(axis=1)  # [*, C_feat]
             return x
 
-        if N > 1 and T > 1:
-            if N == self.cls_head.num_segments:
-                print(x.shape)
-                x = rearrange(x, '(b n t) c h w -> (b t n) c h w', n=N, t=T).contiguous()
+        # if N > 1 and T > 1:
+        #     if N == self.cls_head.num_segments:
+        #         print(x.shape)
+        #         x = rearrange(x, '(b n t) c h w -> (b t n) c h w', n=N, t=T).contiguous()
 
         cls_score = self.cls_head(x, None, domains)
 
-        if N > 1 and T > 1:
-            if N == self.cls_head.num_segments:
-                print(cls_score.shape)
-                cls_score = reduce(cls_score, '(b t) k -> b k', 'mean', t=T)
+        # if N > 1 and T > 1:
+        #     if N == self.cls_head.num_segments:
+        #         print(cls_score.shape)
+        #         cls_score = reduce(cls_score, '(b t) k -> b k', 'mean', t=T)
 
         # Shapes (N.B. ignore num_crops)
             # Vanilla:      [N, K]          (Not here, just for notice)
@@ -355,10 +360,10 @@ class DARecognizer2D(Recognizer2D):
             # OSBP:         [N, K+1]
             # GCD:          [N, 1~3, n_feat]
 
-        if type(cls_score) == list:  # {DANN}
-            cls_score = cls_score[0]  # [N, K]
-        elif len(cls_score.shape) == 3:  # {GCD4DA}
-            cls_score = cls_score[:,0]  # [N, n_feat]
+        # if type(cls_score) == list:  # {DANN}
+        #     cls_score = cls_score[0]  # [N, K]
+        # elif len(cls_score.shape) == 3:  # {GCD4DA}
+        #     cls_score = cls_score[:,0]  # [N, n_feat]
 
         return self.get_prob(cls_score)
 

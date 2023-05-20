@@ -1,18 +1,21 @@
 _base_ = [
     # '../03_gcd/_base_/k2b_gcd_data.py',
-    '../__base__/k2b_tsm_training.py',
+    # '../../__base__/closed_k2b_tsm_training.py',
     # '../../_base_/tsf_warmup_model.py',
-    '../../../../../../_base_/default_runtime.py',
+    '../../../../../../../_base_/default_runtime.py',
 ]
 
 
-# model settings
+#####################################################################################################################
+# model
+
 num_classes = 12
+domain_adaptation = True
+find_unused_parameters = False
 
-domain_adaptation = False
-
+# model settings
 model = dict(
-    type='Recognizer2D',
+    type='DARecognizer2D',
     backbone=dict(
         type='ResNetTSM',
         pretrained=None,
@@ -20,16 +23,27 @@ model = dict(
         num_segments=8,
         norm_eval=False,
         shift_div=8),
+    neck=dict(
+        type='DomainClassifier',
+        in_channels=2048,
+        loss_weight=1.,
+        num_layers=4,
+        dropout_ratio=.5,
+        backbone='TSM', num_segments=8,
+    ),
     cls_head=dict(
         type='TSMHead',
         num_classes=num_classes,
         loss_cls=dict(
             type='EvidenceLoss',
+            loss_weight=1.,
             num_classes=num_classes),
         num_segments=8,
         in_channels=2048,
         dropout_ratio=0.5,
         openset=True),
+    # model training and testing settings
+    train_cfg=None,
     test_cfg=dict(average_clips='score'))
 
 #####################################################################################################################
@@ -43,10 +57,9 @@ datasets = dict(
         start_index=1,
     ),
     K400=dict(
-        # type='VideoDataset',
         type='RawframeDataset',
         filename_tmpl='img_{:05d}.jpg',
-        start_index=0,  # denseflow로 푼 건 0부터 시작하고 opencv로 푼 건 1부터 시작함
+        start_index=0,
     ),
 )
 
@@ -56,12 +69,16 @@ dataset_settings = dict(
             **datasets['K400'],
             data_prefix='/local_datasets/kinetics400/rawframes_resized/train',
             ann_file='data/_filelists/k400/processed/filelist_k400_train_closed.txt'),
-        valid=dict(
+        test=dict(
             **datasets['K400'],
             test_mode=True,
             data_prefix='/local_datasets/kinetics400/rawframes_resized/val',
-            ann_file='data/_filelists/k400/processed/filelist_k400_val_open.txt')),
+            ann_file='data/_filelists/k400/processed/filelist_k400_test_closed.txt')),
     target=dict(
+        train=dict(
+            **datasets['BABEL'],
+            data_prefix='/local_datasets/babel',
+            ann_file='data/_filelists/babel/processed/filelist_babel_train_open.txt'),
         valid=dict(
             **datasets['BABEL'],
             test_mode=True,
@@ -73,57 +90,68 @@ dataset_settings = dict(
             data_prefix='/local_datasets/babel',
             ann_file='data/_filelists/babel/processed/filelist_babel_test_open.txt')))
 
-
 img_norm_cfg = dict(
     mean=[127.5, 127.5, 127.5], std=[127.5, 127.5, 127.5], to_bgr=False)
+    # mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_bgr=False)
 
 pipelines = dict(
     source=dict(
         train=[
-            dict(type='SampleFrames', clip_len=8, frame_interval=32, num_clips=1),
+            dict(type='SampleFrames', clip_len=1, frame_interval=1, num_clips=8),
             dict(type='RawFrameDecode'),
             dict(type='Resize', scale=(-1, 256)),
-
-            dict(type='RandomCrop', size=224),
+            dict(
+                type='MultiScaleCrop',
+                input_size=224,
+                scales=(1, 0.875, 0.66),
+                random_crop=False,
+                max_wh_scale_gap=1,
+                num_fixed_crops=13),
+            dict(type='Resize', scale=(224, 224), keep_ratio=False),
             dict(type='Flip', flip_ratio=0.5),
-
+            # dict(type='ColorJitter'),
             dict(type='Normalize', **img_norm_cfg),
-            dict(type='FormatShape', input_format='NCHW'),
+            dict(type='FormatShape', input_format='NCTHW'),
             dict(type='Collect', keys=['imgs', 'label'], meta_keys=[]),
             dict(type='ToTensor', keys=['imgs', 'label'])
         ],
-        valid=[
-            dict(type='SampleFrames', clip_len=8, frame_interval=32, num_clips=1, test_mode=True),
-            dict(type='RawFrameDecode'),
-            dict(type='Resize', scale=(-1, 256)),
-            dict(type='CenterCrop', crop_size=224),
-            dict(type='Normalize', **img_norm_cfg),
-            dict(type='FormatShape', input_format='NCHW'),
-            dict(type='Collect', keys=['imgs', 'label'], meta_keys=[]),
-            dict(type='ToTensor', keys=['imgs', 'label'])
-        ]
     ),
     target=dict(
+        train=[
+            dict(type='SampleFrames', clip_len=1, frame_interval=1, num_clips=8, test_mode=True),
+            dict(type='RawFrameDecode'),
+            dict(type='Resize', scale=(-1, 256)),
+            dict(type='RandomCrop', size=224),
+            dict(type='Flip', flip_ratio=0.5),
+            dict(type='Normalize', **img_norm_cfg),
+            dict(type='FormatShape', input_format='NCTHW'),
+            dict(type='Collect', keys=['imgs', 'label'], meta_keys=[]),
+            dict(type='ToTensor', keys=['imgs', 'label'])
+        ],
         valtest=[
             dict(type='SampleFrames', clip_len=1, frame_interval=1, num_clips=8, test_mode=True),
             dict(type='RawFrameDecode'),
             dict(type='Resize', scale=(-1, 256)),
             dict(type='CenterCrop', crop_size=224),
             dict(type='Normalize', **img_norm_cfg),
-            dict(type='FormatShape', input_format='NCHW'),
+            dict(type='FormatShape', input_format='NCTHW'),
             dict(type='Collect', keys=['imgs', 'label'], meta_keys=[]),
             dict(type='ToTensor', keys=['imgs', 'label'])
         ]
     ),
 )
-
 data = dict(
-    videos_per_gpu=24,
-    workers_per_gpu=8,
-    val_dataloader=dict(videos_per_gpu=40),
-    train=dict(
-        **dataset_settings['source']['train'],
-        pipeline=pipelines['source']['train']),
+    videos_per_gpu=12,
+    workers_per_gpu=10,
+    val_dataloader=dict(videos_per_gpu=4),
+    train=[
+        dict(
+            **dataset_settings['source']['train'],
+            pipeline=pipelines['source']['train']),
+        dict(
+            **dataset_settings['target']['train'],
+            pipeline=pipelines['target']['train']),
+    ],
     val=dict(
         **dataset_settings['target']['valid'],
         pipeline=pipelines['target']['valtest']),
@@ -135,7 +163,27 @@ data = dict(
 #####################################################################################################################
 # training
 
-# evaluation = dict(
-#     interval=5,
-#     metrics=['top_k_accuracy', 'mean_class_accuracy', 'H_mean_class_accuracy', 'confusion_matrix'],  # valid, test 공용으로 사용
-#     save_best='mean_class_accuracy')
+evaluation = dict(
+    interval=5,
+    metrics=['top_k_accuracy', 'H_mean_class_accuracy', 'confusion_matrix'],  # valid, test 공용으로 사용
+    save_best='H_mean_class_accuracy')
+
+# optimizer
+lr=1e-3
+optimizer = dict(
+    type='SGD',
+    constructor='TSMOptimizerConstructor',
+    paramwise_cfg=dict(fc_lr5=False),
+    lr=lr,
+    momentum=0.9,
+    weight_decay=1e-4)
+optimizer_config = dict(
+    type='GradientCumulativeOptimizerHook',  # 지금은 노필요
+    cumulative_iters=3,
+    grad_clip=dict(max_norm=40, norm_type=2))
+
+# learning policy
+lr_config = dict(policy='step', step=[5, 10])
+total_epochs = 20
+work_dir = './work_dirs/train_output/hello/cdar/tsm'
+load_from = ''

@@ -40,7 +40,8 @@ class DomainClassifier(nn.Module):
         self.nickname = nickname
         self.grl = lambda x: GradReverse.apply(x)
         self.fc_domain:nn.Sequential = get_fc_block_by_channels(
-            self.in_channels, 1, [self.hidden_dim]*self.num_layers, self.dropout_ratio
+            self.in_channels, 1, [self.hidden_dim]*self.num_layers,
+            dropout_ratio=self.dropout_ratio
         )
 
         self.bce = torch.nn.BCEWithLogitsLoss()

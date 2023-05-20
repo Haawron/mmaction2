@@ -68,7 +68,7 @@ class DomainAdaptationRunner(EpochBasedRunner):
             self._inner_iter = i
             self.call_hook('before_train_iter')
             kwargs['iter'] = self._iter
-            kwargs['epoch'] = self._epoch  # for edl loss
+            kwargs['cur_epoch'] = self._epoch  # for edl loss
             kwargs['total_epoch'] = self._max_epochs  # for edl loss
             self.run_iter(data_batches, self.domains, train_mode=True, **kwargs)
             self.call_hook('after_train_iter')

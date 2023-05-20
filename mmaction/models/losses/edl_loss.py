@@ -24,10 +24,11 @@ class EvidenceLoss(BaseWeightedLoss):
                  with_kldiv=False,
                  with_avuloss=True,  # Average vs. Uncertainty -> EUC loss
                  disentangle=False,
+                 loss_weight=1.,
                  annealing_method='exp',
                  annealing_start=0.01,
                  annealing_step=10):
-        super().__init__()
+        super().__init__(loss_weight)
         self.num_classes = num_classes
         self.evidence = evidence
         self.loss_type = loss_type

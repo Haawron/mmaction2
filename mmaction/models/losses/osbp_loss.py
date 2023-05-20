@@ -1,9 +1,9 @@
 from ..builder import LOSSES
 from .base import BaseWeightedLoss
 
+import numpy as np
 import torch
 import torch.nn.functional as F
-import numpy as np
 
 
 @LOSSES.register_module()
@@ -34,7 +34,7 @@ class OSBPLoss(BaseWeightedLoss):
         self.loss_weight = loss_weight
 
     def loss_adv(self, p_unk, t:float):  # p_unk: [B]
-        p_unk = p_unk.contiguous()
+        p_unk = p_unk
         p_nk = 1. - p_unk
 
         t_unk = t * torch.ones_like(p_unk).to(p_unk.device)  # [B]
@@ -64,28 +64,9 @@ class OSBPLoss(BaseWeightedLoss):
         logits_source = cls_score[source_idx]
         logits_target = cls_score[target_idx]
         labels_source = labels[source_idx]
-        prob_target = F.softmax(logits_target, dim=1)  # [B, K+1]
-        loss_s = self.loss_cls(logits_source[:,:-1], labels_source)
-        loss_t = self.loss_adv(prob_target[:,-1], self.target_domain_label)
+        probas_target = F.softmax(logits_target, dim=1)  # [B, K+1]
+        loss_s = self.loss_cls(logits_source[:,:-1].contiguous(), labels_source)
+        loss_t = self.loss_adv(probas_target[:,-1].contiguous(), self.target_domain_label)
         losses = {'loss_cls': loss_s, 'loss_osbp': self.loss_weight * loss_t}
-
-        # for logging
-        # unknown accuracy
-        labels_target = labels[target_idx]  # [B]
-        preds_target = prob_target.argmax(dim=1)  # [B]
-        is_unknown_labels_target = labels_target >= self.num_classes - 1  # is unknown
-        is_unknown_preds_target = preds_target >= self.num_classes - 1
-        acc_unk = (is_unknown_preds_target == is_unknown_labels_target).type(torch.float32).mean()
-        losses.update({'acc_unk': acc_unk})
-
-        # mca
-        mca_source = self.calc_mca(logits_source, labels_source)
-        if is_unknown_labels_target.any():
-            mca_target = self.calc_mca(
-                logits_target[~is_unknown_labels_target],
-                labels_target[~is_unknown_labels_target])
-        else:
-            mca_target = torch.empty()
-        losses.update({'mca_source': mca_source, 'mca_os*_target': mca_target})
 
         return losses

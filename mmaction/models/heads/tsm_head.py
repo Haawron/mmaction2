@@ -3,12 +3,14 @@ from collections import OrderedDict
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from mmcv.cnn import normal_init
 
 from einops import rearrange, reduce
 
 from ..builder import HEADS
-from .base import AvgConsensus, BaseHead
+from .base import AvgConsensus, BaseHead, concat_unct_to_logits
+from mmaction.models.common import calc_mca
 
 
 @HEADS.register_module()
@@ -55,6 +57,14 @@ class TSMHead(BaseHead):
         self.is_shift = is_shift
         self.temporal_pool = temporal_pool
         self.openset = openset
+
+        if self.openset:
+            self.record = {
+                'probas': [],
+                'labels': [],
+            }
+            self.record_count = 0
+            self.record_length = 20
 
         consensus_ = consensus.copy()
 
@@ -122,31 +132,52 @@ class TSMHead(BaseHead):
         cls_score = cls_score.squeeze(1)  # [D x B, K]
 
         if not train and self.openset:
-            evidence = torch.exp(torch.clamp(cls_score, -10, 10))  # [D x B, K]
-            alpha = evidence + 1  # [D x B, K]
-            S = torch.sum(alpha, dim=1, keepdim=True)  # [D x B, 1]
-            cls_score = cls_score / S  # [D x B, K]
-            uncertainty = self.num_classes / S  # [D x B, 1]
-            cls_score = torch.cat([cls_score, uncertainty], dim=1)  # [D x B, K+1]
+            cls_score = concat_unct_to_logits(cls_score, self.num_classes)
+            # evidence = torch.exp(torch.clamp(cls_score, -10, 10))  # [D x B, K]
+            # alpha = evidence + 1  # [D x B, K]
+            # S = torch.sum(alpha, dim=1, keepdim=True)  # [D x B, 1]
+            # cls_score = cls_score / S  # [D x B, K]
+            # uncertainty = self.num_classes / S  # [D x B, 1]
+            # cls_score = torch.cat([cls_score, uncertainty], dim=1)  # [D x B, K+1]
 
         return cls_score
 
-    def loss(self, cls_score, labels, domains=None, **kwargs):
+    def loss(self, cls_score, labels, domains=None, train=False, **kwargs):
+        losses = {}
         if domains is not None:
             source_idx = domains == 'source'
             target_idx = ~source_idx
-            mca_source = self.calc_mca(cls_score[source_idx], labels[source_idx])
-            losses['mca_s'] = mca_source
+            mca_source = self.calc_mca(cls_score[source_idx].detach(), labels[source_idx])
             if self.openset:
-                unk_gt = (labels[target_idx] >= self.num_classes)
-                mca_target = self.calc_mca(
-                    cls_score[target_idx].detach()[~unk_gt],
-                    labels[target_idx][~unk_gt],
-                    max_label=self.num_classes)
-                losses['mca_os*_t'] = mca_target
+                logits = concat_unct_to_logits(cls_score.detach(), self.num_classes)
+                logits_source = logits[source_idx]
+                logits_target = logits[target_idx]
+                labels_source = labels[source_idx]
+                labels_target = labels[target_idx]
+                probas_target = F.softmax(logits_target, dim=1)  # [B, K+1]
+                self.record['probas'].append(probas_target)
+                self.record['labels'].append(labels_target)
+                if self.record_count > self.record_length:
+                    self.record['probas'] = self.record['probas'][1:]
+                    self.record['labels'] = self.record['labels'][1:]
+                self.record_count += 1
+                probas_ = torch.cat(self.record['probas'])
+                labels_ = torch.cat(self.record['labels'])
+
+                # OS*
+                mca_source = calc_mca(logits_source, labels_source, max_label=self.num_classes+1)
+                mca_target = calc_mca(probas_, labels_, max_label=self.num_classes+1)
+                losses.update({'s_os*': mca_source, 't_os*': mca_target})
+
+                # UNK
+                is_unk_gt = labels_ == self.num_classes
+                is_unk_pred = probas_.argmax(dim=1) == self.num_classes
+                acc_unk = torch.mean((is_unk_gt == is_unk_pred).type(torch.float))
+                losses.update({'t_unk': acc_unk})
             else:
                 mca_target = self.calc_mca(cls_score[target_idx], labels[target_idx])
-                losses['mca_t'] = mca_target
+                losses['t_mca'] = mca_source
+                losses['t_mca'] = mca_target
         else:
             mca = self.calc_mca(cls_score, labels)
             losses = {'mca': mca}

@@ -6,9 +6,10 @@ from .tam import TAM
 from .transformer import (DividedSpatialAttentionWithNorm,
                           DividedTemporalAttentionWithNorm, FFNWithNorm)
 from .temporal_locality_fusion import temporal_locality_fuse
+from .metrics import calc_mca
 
 __all__ = [
     'Conv2plus1d', 'ConvAudio', 'LFB', 'TAM',
     'DividedSpatialAttentionWithNorm', 'DividedTemporalAttentionWithNorm',
-    'FFNWithNorm', 'temporal_locality_fuse'
+    'FFNWithNorm', 'temporal_locality_fuse', 'calc_mca'
 ]

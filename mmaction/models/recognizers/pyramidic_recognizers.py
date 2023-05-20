@@ -304,7 +304,7 @@ class TemporallyPyramidicDARecognizer(BaseDARecognizer):
             f_tallies, _ = self.forward_neck(f_tallies, None, domains, **kwargs)
 
         outs = temporal_locality_fuse(
-            f_tallies,
+            f_tallies,  # [[B, V, C_l], ...]
             temporal_locality='both',
             fusion_method='mean'
         )  # [2 x B. C_l]

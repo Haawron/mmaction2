@@ -38,11 +38,16 @@ def temporal_locality_fuse(
     assert fusion_method in ['', 'concat', 'mean']
 
     B = f_tallies[0][0].shape[0]
-    Vs = [f.shape[1] for f_tally in f_tallies for f in f_tally]  # [4]
+    Vs = [f.shape[1] if f is not None else 0 for f_tally in f_tallies for f in f_tally]  # [4]
     if len(Vs) < 4:  # if single domain
         Vs += [0] * (4 - len(Vs))
 
-    if temporal_locality in ['local', 'global']:
+    if len(f_tallies[0]) == 1:  # single modal
+        # TODO: Other methods
+        fs = torch.cat([f for f_tally in f_tallies for f in f_tally]).mean(dim=1)
+        domains = ['source'] * B + ['target'] * B
+
+    elif temporal_locality in ['local', 'global']:
         if temporal_locality == 'local':
             fs = [f_local for f_local, _ in f_tallies]  # [[B, V0, C_l], [B, V2, C_l]]
             V_s, V_t = Vs[0], Vs[2]

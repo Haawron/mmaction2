@@ -23,12 +23,16 @@ def get_fc_block(c_in, c_out, num_layers, dropout_ratio):
     return nn.Sequential(*fc_block)
 
 
-def get_fc_block_by_channels(c_in, c_out, c_mids=[], dropout_ratio=.5):
-    def get_block(c_in, c_out, dropout_ratio=.5, act=True):
+def get_fc_block_by_channels(c_in, c_out, c_mids=[], bn=False, dropout_ratio=.5, act_first=False):
+    def get_block(c_in, c_out, bn=False, act=True, dropout_ratio=.5):
         fc = nn.Linear(c_in, c_out)
-        dropout = nn.Dropout(p=dropout_ratio) if dropout_ratio > 1e-12 else nn.Identity()
+        bn = nn.BatchNorm1d(c_out) if bn else nn.Identity()
         act = nn.ReLU() if act else nn.Identity()
-        return nn.Sequential(fc, dropout, act)
+        dropout = nn.Dropout(p=dropout_ratio) if dropout_ratio > 1e-12 else nn.Identity()
+        if act_first:
+            return nn.Sequential(fc, bn, act, dropout)
+        else:
+            return nn.Sequential(fc, bn, dropout, act)
     fc_blocks = nn.ModuleList()
     if c_mids:
         for i, (_c_in, _c_out) in enumerate(zip(
@@ -36,13 +40,23 @@ def get_fc_block_by_channels(c_in, c_out, c_mids=[], dropout_ratio=.5):
             c_mids + [c_out]
         )):
             if i == len(c_mids):
-                fc_block = get_block(_c_in, _c_out, 0, False)
+                fc_block = get_block(_c_in, _c_out, bn, False, 0)
             else:
-                fc_block = get_block(_c_in, _c_out, dropout_ratio, True)
+                fc_block = get_block(_c_in, _c_out, bn, True, dropout_ratio)
             fc_blocks.append(fc_block)
     else:
-        fc_blocks += get_block(c_in, c_out, dropout_ratio, False)
+        fc_blocks += get_block(c_in, c_out, bn, False, dropout_ratio)
     return nn.Sequential(*fc_blocks)
+
+
+def concat_unct_to_logits(cls_score, num_classes):
+    evidence = torch.exp(torch.clamp(cls_score, -10, 10))  # [D x B, K]
+    alpha = evidence + 1  # [D x B, K]
+    S = torch.sum(alpha, dim=1, keepdim=True)  # [D x B, 1]
+    cls_score = cls_score / S  # [D x B, K]
+    uncertainty = num_classes / S  # [D x B, 1]
+    cls_score = torch.cat([cls_score, uncertainty], dim=1)  # [D x B, K+1]
+    return cls_score
 
 
 class AvgConsensus(nn.Module):
