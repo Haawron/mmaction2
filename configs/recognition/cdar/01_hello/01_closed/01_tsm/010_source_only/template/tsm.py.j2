@@ -1,0 +1,29 @@
+_base_ = [
+    '../../../../_base_/models/tsm_model.py',
+    '../../../../_base_/data/source_only_data.py',
+    '../../../../../_base_/closed_tsm_training.py',
+    '../../../../../../../_base_/default_runtime.py',
+]
+
+dataset_settings = dict(
+    source=dict(
+        train=dict(
+            type='RawframeDataset',
+            data_prefix='/local_datasets/{{ source }}/rawframes',
+            ann_file='data/_filelists/{{ source }}/filelist_{{ source | regex_replace("\d*", "") }}_train_closed.txt'),
+        valid=dict(
+            type='RawframeDataset',
+            data_prefix='/local_datasets/{{ source }}/rawframes',
+            ann_file='data/_filelists/{{ source }}/filelist_{{ source | regex_replace("\d*", "") }}_val_closed.txt')),
+    target=dict(
+        test=dict(
+            type='RawframeDataset',
+            data_prefix='/local_datasets/{{ target }}/rawframes',
+            ann_file='data/_filelists/{{ target }}/filelist_{{ target | regex_replace("\d*", "") }}_val_closed.txt')),
+)
+
+data = dict(
+    train=dict( **dataset_settings['source']['train']),
+    val=dict(   **dataset_settings['source']['valid']),
+    test=dict(  **dataset_settings['target']['test'])
+)

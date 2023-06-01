@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Usage:
+# ./slurm/cdar/01_hello/generate_and_submit.sh slurm/cdar/01_hello/01_tsm/template/tsm.sh.j2
 template_file=${1:-'slurm/cdar/01_hello/02_timesformer/template/tsf-warmup.sh.j2'}
 
 echo "$template_file"
