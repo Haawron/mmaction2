@@ -9,6 +9,7 @@ from typing import List, Dict, Any
 from collections import defaultdict
 from textwrap import indent
 from sty import ef
+import socket
 
 import numpy as np
 import pandas as pd
@@ -43,7 +44,7 @@ class VOSUDAReport:
         self.print_path = print_path
         self.valid_score_instead_of_test = valid_score_instead_of_test
         self.show_hidden = show_hidden
-        self.p_root = Path('/data/hyogun/repos/haawron_mmaction2/work_dirs/train_output/cdar/03_simnreal')
+        self.p_root = Path(f'/data/{"gunsbrother" if "ariel" in socket.gethostname() else "gunsbrother"}/repos/haawron_mmaction2/work_dirs/train_output/cdar')
         self.p_valid_jobs = self.get_valid_job_dirs(self.p_root)
         job_dicts, orders = self.get_job_dicts_from_job_dirs(self.p_valid_jobs)
 
@@ -60,10 +61,13 @@ class VOSUDAReport:
                 print(f"Subtask: {openness.title()} {dataset.replace('_', ' → ')} ({metric_name})")
                 print()
                 df_subtask:pd.DataFrame = df_task[df_task['subtask']==subtask]
+                df_subtask = df_subtask.sort_values(by='jid')
+                df_subtask = df_subtask.sort_values(by='model', key=lambda col: col.map(orders['model']))
+                df_subtask = df_subtask.sort_values(by='backbone', key=lambda col: col.map(orders['backbone']))
                 df_subtask = df_subtask.pivot_table(
                     values=metric_name,
-                    index=['model', 'option1', 'option2', 'jid'],
-                    columns=['job_array_idx']
+                    index=['backbone', 'model', 'option1', 'option2', 'jid'],
+                    columns=['job_array_idx'], sort=False
                 )
                 df_blank = pd.DataFrame(index=df_subtask.index)  # blank column for readability
                 df_blank[' '] = ' '
@@ -127,6 +131,7 @@ class VOSUDAReport:
             order_task, task = task.split('_', 1)
             order_subtask, subtask = subtask.split('_', 1)
             order_model, model = model.split('_', 1)
+            order_backbone, backbone = backbone.split('_', 1)
             jid = int(jobname.split('__')[0])
             job_array_idx = int(job_array_idx)
             job_dict = {
@@ -145,6 +150,7 @@ class VOSUDAReport:
                 'task': {task: order_task},
                 'subtask': {subtask: order_subtask},
                 'model': {model: order_model},
+                'backbone': {backbone: order_backbone},
             }
             return job_dict, order
 
