@@ -4,7 +4,7 @@ import torch.nn as nn
 
 @HEADS.register_module()
 class IdentityHead(nn.Module):
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         super().__init__()
         self.identity = nn.Identity()
 

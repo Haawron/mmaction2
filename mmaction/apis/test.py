@@ -78,14 +78,14 @@ if not from_mmcv:
         results = []
         dataset = data_loader.dataset
         rank, world_size = get_dist_info()
-        if rank == 0 and 'SRUN_DEBUG' not in os.environ:
+        if rank == 0 and 'SRUN_DEBUG' in os.environ:
             prog_bar = mmcv.ProgressBar(len(dataset))
         for data in data_loader:
             with torch.no_grad():
                 result = model(return_loss=False, **data)
             results.extend(result)
 
-            if rank == 0 and 'SRUN_DEBUG' not in os.environ:
+            if rank == 0 and 'SRUN_DEBUG' in os.environ:
                 # use the first key as main key to calculate the batch size
                 batch_size = len(next(iter(data.values())))
                 for _ in range(batch_size * world_size):

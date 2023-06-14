@@ -3,6 +3,7 @@ from collections.abc import Iterable
 import torch
 from torch import nn
 import numpy as np
+from einops import reduce
 
 from ..builder import RECOGNIZERS
 from .recognizer2d import DARecognizer2D
@@ -20,27 +21,70 @@ class DARecognizer3D(DARecognizer2D):
             domains = np.tile(domains, (2, 1)).T.reshape(-1)  # [2B] -> [2, 2B] -> [2B, 2] -> [4B]
         else:
             # COP: [2B, N, C, T, H, W]
-            if imgs.dim() > 5:
-                imgs = imgs.reshape((-1, ) + imgs.shape[2:])
+            if isinstance(imgs, list):
+                new_imgs = []
+                for imgs_ in imgs:
+                    if imgs_.dim() > 5:
+                        imgs_ = imgs_.reshape((-1, ) + imgs_.shape[2:])  # -> [B x N, C, T, H, W]
+                        new_imgs.append(imgs_)
+                imgs = new_imgs
+            elif imgs.dim() > 5:
+                imgs = imgs.reshape((-1, ) + imgs.shape[2:])  # -> [2B x N, C, T, H, W]
             else:
                 pass
         losses = dict()
 
-        x = self.extract_feat(imgs)
-        if self.with_neck:
-            vertebrae = self.neck
-            if not isinstance(vertebrae, Iterable):
-                vertebrae = [vertebrae]
-            for vertebra in vertebrae:
-                x, loss_aux = vertebra(x, labels.squeeze(dim=1), domains=domains, **kwargs)
-                losses.update(loss_aux)
+        if isinstance(imgs, list):
+            x_source = self.extract_feat(imgs[0])
+            x_target = self.extract_feat(imgs[1])
+            x_source = reduce(x_source, 'bn cl tl hl wl -> bn cl', 'mean').contiguous()
+            x_target = reduce(x_target, 'bn cl tl hl wl -> bn cl', 'mean').contiguous()
+            x = torch.cat([x_source, x_target])
+            # if self.with_neck:
+            #     x, losses_aux = self.forward_neck(x, labels.squeeze(dim=1), train=True, domains=domains, **kwargs)
+            #     losses.update(losses_aux)
+        else:
+            x = self.extract_feat(imgs)
+            x = reduce(x, 'bn cl tl hl wl -> bn cl', 'mean').contiguous()
 
-        cls_score = self.cls_head(x, domains)
+        if self.with_neck:
+            x, losses_aux = self.forward_neck(x, labels.squeeze(dim=1), train=True, domains=domains, **kwargs)
+            losses.update(losses_aux)
+
         gt_labels = labels.squeeze(dim=1)
-        loss_cls = self.cls_head.loss(cls_score, gt_labels, domains, **kwargs)
+        cls_score = self.cls_head(x, labels=gt_labels, domains=domains, train=True, **kwargs)
+        loss_cls = self.cls_head.loss(cls_score, labels=gt_labels, domains=domains, train=True, **kwargs)
         losses.update(loss_cls)
 
         return losses
+
+    def extract_feat(self, imgs):
+        if isinstance(imgs, list):
+            imgs_source, imgs_target = imgs
+            x_source = super().extract_feat(imgs_source)
+            x_target = super().extract_feat(imgs_target)
+            return [x_source, x_target]
+        else:
+           return super().extract_feat(imgs)
+
+    def forward_neck(self, x, labels, **kwargs):
+        losses_aux = dict()
+        vertebrae = self.neck
+        if not isinstance(vertebrae, Iterable):
+            vertebrae = [vertebrae]
+        for vertebra in vertebrae:
+            if isinstance(x, list):
+                x_source, x_target = x
+                x_source, loss_aux_source = vertebra(x_source, labels, **kwargs)
+                x_target, loss_aux_target = vertebra(x_target, labels, **kwargs)
+                loss_aux_source = {k+'_s': v for k, v in loss_aux_source.items()}
+                loss_aux_target = {k+'_t': v for k, v in loss_aux_target.items()}
+                losses_aux.update(loss_aux_source)
+                losses_aux.update(loss_aux_target)
+            else:
+                x, loss_aux = vertebra(x, labels, **kwargs)
+                losses_aux.update(loss_aux)
+        return x, losses_aux
 
     def _do_test(self, imgs, domains):
         """Defines the computation performed at every call when evaluation,
@@ -74,6 +118,7 @@ class DARecognizer3D(DARecognizer2D):
                 feat = torch.cat(feats)
         else:
             feat = self.extract_feat(imgs)
+            feat = reduce(feat, 'bn cl tl hl wl -> bn cl', 'mean').contiguous()
             if self.with_neck:
                 vertebrae = self.neck
                 if not isinstance(vertebrae, Iterable):
@@ -106,5 +151,5 @@ class DARecognizer3D(DARecognizer2D):
 
         # should have cls_head if not extracting features
         assert self.with_cls_head
-        cls_score = self.cls_head(feat, domains)
+        cls_score = self.cls_head(feat, domains=domains)
         return self.get_prob(cls_score)

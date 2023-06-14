@@ -1,0 +1,52 @@
+#!/bin/bash
+
+#SBATCH -J {{ idx }}_{{ source | regex_replace("\d*", "") }}_{{ target | regex_replace("\d*", "") }}-i3d
+#SBATCH -p batch_grad
+#SBATCH --gres=gpu:4
+#SBATCH --cpus-per-gpu=8
+#SBATCH --mem-per-gpu=29G
+#SBATCH -t 1-0
+#SBATCH -x ariel-g[1-5],ariel-v[1-6,9-13]
+#SBATCH --array 0-3%2
+#SBATCH -o slurm/logs/slurm-%A_%a-%x.out
+
+current_time=$(date +'%Y%m%d-%H%M%S')
+
+
+source_name={{ source | regex_replace("\d*", "") }}
+target_name={{ target | regex_replace("\d*", "") }}
+
+# overleaf table 기준
+project='cdar'
+task='01_hello'  # table name
+subtask={{ idx }}_closed_${source_name}_${target_name}  # column
+backbone='03_i3d'
+model='010_source_only'  # row
+add_on='default'
+extra_setting='default'  # 'default' if none
+path_experiment="${project}/${task}/${subtask}/${backbone}/${model}/${add_on}/${extra_setting}"
+
+workdir="work_dirs/train_output"
+workdir="${workdir}/${path_experiment}"
+workdir="${workdir}/${SLURM_ARRAY_JOB_ID}__${SLURM_JOB_NAME}/${SLURM_ARRAY_TASK_ID}/${current_time}"
+
+
+lr=1e-3
+
+config_j2='configs/recognition/cdar/01_hello/03_i3d/010_source_only/template/i3d.py.j2'
+rendered_dir="${config_j2%template*}rendered"  # **/template/* -> **/rendered
+mkdir -p $rendered_dir
+config="${rendered_dir}/${source_name}_${target_name}_$(basename $config_j2 .j2)"
+python slurm/utils/commons/render_template.py -f $config_j2 --source {{ source }} --target {{ target }} > $config
+
+N=$SLURM_GPUS_ON_NODE
+calibed_lr="$(perl -le "print $lr * $N / 4")"
+OMP_NUM_THREADS=${N} MKL_NUM_THREADS=${N} torchrun --nproc_per_node="${N}" --master_port=$((10000+RANDOM%20000)) tools/train.py $config \
+    --launcher pytorch --seed "$SLURM_ARRAY_TASK_ID" \
+    --work-dir "$workdir" \
+    --cfg-options \
+        optimizer.lr="$calibed_lr" \
+        evaluation.interval=1 \
+    --validate --test-last --test-best
+
+exit 0

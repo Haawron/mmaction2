@@ -62,6 +62,7 @@ class VOSUDAReport:
                 print()
                 df_subtask:pd.DataFrame = df_task[df_task['subtask']==subtask]
                 df_subtask = df_subtask.sort_values(by='jid')
+                df_subtask = df_subtask.sort_values(by='job_array_idx')
                 df_subtask = df_subtask.sort_values(by='model', key=lambda col: col.map(orders['model']))
                 df_subtask = df_subtask.sort_values(by='backbone', key=lambda col: col.map(orders['backbone']))
                 df_subtask = df_subtask.pivot_table(

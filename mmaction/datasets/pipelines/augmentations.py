@@ -1981,6 +1981,8 @@ class BackgroundBlend:
                 print(f'BG file open failed for {count_try} times')
                 print(bg_path)
                 print(e)
+                if count_try == 10:
+                    raise
             else:
                 break
         bg_img = self._preprocess_bg(bg_img)

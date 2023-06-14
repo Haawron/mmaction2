@@ -52,8 +52,8 @@ class VCOPN(nn.Module):
         for layer in [self.fc_cop1, self.fc_cop2]:
             normal_init(layer, std=self.init_std)
 
-    def forward(self, f, labels=None, domains=None, **kwargs):
-        if domains is None:  # if valid or test
+    def forward(self, f, labels=None, domains=None, train=False, **kwargs):
+        if not train:  # if valid or test
             return f, None  # f: [B x N=1, n_feat=768]
 
         # f

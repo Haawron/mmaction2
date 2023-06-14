@@ -6,6 +6,8 @@ _base_ = [
 # model settings
 model = dict(
     backbone=dict(
+        pretrained2d=False,
+        pretrained=None,
         non_local=((0, 0, 0), (0, 1, 0, 1), (0, 1, 0, 1, 0, 1), (0, 0, 0)),
         non_local_cfg=dict(
             sub_sample=True,
@@ -15,11 +17,11 @@ model = dict(
 
 # dataset settings
 dataset_type = 'RawframeDataset'
-data_root = 'data/kinetics400/rawframes_train'
-data_root_val = 'data/kinetics400/rawframes_val'
-ann_file_train = 'data/kinetics400/kinetics400_train_list_rawframes.txt'
-ann_file_val = 'data/kinetics400/kinetics400_val_list_rawframes.txt'
-ann_file_test = 'data/kinetics400/kinetics400_val_list_rawframes.txt'
+data_root = '/local_datasets/kinetics400/rawframes_resized/train'
+data_root_val = '/local_datasets/kinetics400/rawframes_resized/val'
+ann_file_train = 'data/_filelists/k400/processed/filelist_k400_train_closed.txt'
+ann_file_val = 'data/_filelists/k400/processed/filelist_k400_val_closed.txt'
+ann_file_test = 'data/_filelists/k400/processed/filelist_k400_test_closed.txt'
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_bgr=False)
 train_pipeline = [
@@ -70,21 +72,24 @@ test_pipeline = [
     dict(type='ToTensor', keys=['imgs'])
 ]
 data = dict(
-    videos_per_gpu=8,
-    workers_per_gpu=2,
+    videos_per_gpu=24,
+    workers_per_gpu=10,
     test_dataloader=dict(videos_per_gpu=1),
     train=dict(
         type=dataset_type,
+        start_index=0,
         ann_file=ann_file_train,
         data_prefix=data_root,
         pipeline=train_pipeline),
     val=dict(
         type=dataset_type,
+        start_index=0,
         ann_file=ann_file_val,
         data_prefix=data_root_val,
         pipeline=val_pipeline),
     test=dict(
         type=dataset_type,
+        start_index=0,
         ann_file=ann_file_val,
         data_prefix=data_root_val,
         pipeline=test_pipeline))
@@ -94,3 +99,4 @@ evaluation = dict(
 # runtime settings
 # checkpoint_config = dict(interval=5)
 work_dir = './work_dirs/i3d_nl_dot_product_r50_32x2x1_100e_kinetics400_rgb/'
+load_from = 'data/weights/i3d/i3d_imagenet-pretrained-r50-nl-dot-product_8xb8-32x2x1-100e_kinetics400-rgb_20220812-8e1f2148.pth'

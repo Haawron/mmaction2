@@ -87,6 +87,7 @@ class TemporallyPyramidicRecognizer(BaseRecognizer):
     def __init__(self,
                  sampler_name:str,
                  sampler_index=dict(),
+                 dim='2d',
                  fuse_before_head=True,
                  consensus_before_head=True,
                  locality_aware_head=False,
@@ -94,6 +95,7 @@ class TemporallyPyramidicRecognizer(BaseRecognizer):
         super().__init__(*args, **kwargs)
         self.sampler_name = sampler_name
         self.sampler = FrameSampler(self.sampler_name, sampler_index)
+        self.dim = dim
         self.fuse_before_head = fuse_before_head
         self.consensus_before_head = consensus_before_head
         self.locality_aware_head = locality_aware_head
@@ -203,9 +205,14 @@ class TemporallyPyramidicRecognizer(BaseRecognizer):
                 f_tally.append(imgs)
                 continue
             _, V, N_, _, T_, _, _ = imgs.shape  # [B, V', N', C, T', H, W], V, N, T would be diff from original after resampling
-            imgs = rearrange(imgs, 'b v n c t h w -> (b v n t) c h w').contiguous()  # [B x N x T, C, H, W]
-            f = super().extract_feat(imgs)  # [B x V x N' x T', C_l, H_l, W_l]
-            f = reduce(f, '(b v n t) cl hl wl -> b v (n t) cl', 'mean', v=V, n=N_, t=T_)
+            if self.dim == '2d':
+                imgs = rearrange(imgs, 'b v n c t h w -> (b v n t) c h w').contiguous()  # [B x V x N x T, C, H, W]
+                f = super().extract_feat(imgs)  # [B x V x N' x T', C_l, H_l, W_l]
+                f = reduce(f, '(b v n t) cl hl wl -> b v (n t) cl', 'mean', v=V, n=N_, t=T_)
+            elif self.dim == '3d':
+                imgs = rearrange(imgs, 'b v n c t h w -> (b v) c (n t) h w').contiguous()  # [B x V, C, N x T, H, W]
+                f = super().extract_feat(imgs)  # [B x V, C_l, NT/8, H_l, W_l]
+                f = reduce(f, '(b v) cl nt hl wl -> b v nt cl', 'mean', v=V)
             f_tally.append(f)
         return f_tally
 
@@ -215,6 +222,7 @@ class TemporallyPyramidicDARecognizer(BaseDARecognizer):
     def __init__(self,
                  sampler_name:str,
                  sampler_index=dict(),
+                 dim='2d',
                  fuse_at='mid',
                  *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -222,6 +230,7 @@ class TemporallyPyramidicDARecognizer(BaseDARecognizer):
         self.sampler_name = sampler_name
         self.sampler = FrameSampler(self.sampler_name, sampler_index)
         self.fuse_at = fuse_at
+        self.dim = dim
 
     def forward_train(self, imgs_from_domains:List[torch.Tensor], labels, domains, **kwargs):
         """
@@ -261,7 +270,7 @@ class TemporallyPyramidicDARecognizer(BaseDARecognizer):
                 temporal_locality='both',
                 fusion_method='mean'
             )  # [2 x B. C_l]
-            cls_score = self.cls_head(outs, domains, train=True, **kwargs)
+            cls_score = self.cls_head(outs, domains=domains, train=True, **kwargs)
 
         elif self.fuse_at == 'late':
             # late fuse: head -> fuse + consensus
@@ -275,7 +284,7 @@ class TemporallyPyramidicDARecognizer(BaseDARecognizer):
             ], dim=1)  # [B x sum V x N' x T', C_l]
             f_tallies_tmp = rearrange(f_tallies_tmp, 'b v_nt c_l -> (b v_nt) c_l')
             cls_score_tallies = self.cls_head(
-                f_tallies_tmp, domains, train=True,
+                f_tallies_tmp, domains=domains, train=True,
                 **kwargs
             )  # [B x sum V, K]
             cls_score_tallies = rearrange(
@@ -292,7 +301,7 @@ class TemporallyPyramidicDARecognizer(BaseDARecognizer):
 
         #################################################################################
 
-        loss_cls = self.cls_head.loss(cls_score, labels, domains, train=True, **kwargs)
+        loss_cls = self.cls_head.loss(cls_score, labels, domains=domains, train=True, **kwargs)
         losses.update(loss_cls)
         return losses
 
@@ -337,15 +346,26 @@ class TemporallyPyramidicDARecognizer(BaseDARecognizer):
                 if imgs_subset is None:
                     continue
                 _, V, N_, _, T_, _, _ = imgs_subset.shape  # [B, V, N', C_l, T', H_l, W_l], V, N, T would be diff from original after resampling
-                imgs_subset = rearrange(
-                    imgs_subset, 'b v n c t h w -> (b v n t) c h w'
-                ).contiguous()  # [D x B x V x N x T, C, H, W]
-                f = super().extract_feat(imgs_subset)
                 # TODO: replace this block in more reasonable logic
-                if consensus:
-                    f = reduce(f, '(b v n t) cl hl wl -> b v cl', 'mean', v=V, n=N_, t=T_)
-                else:
-                    f = reduce(f, '(b v n t) cl hl wl -> b v n t cl', 'mean', v=V, n=N_, t=T_)
+                if self.dim == '2d':
+                    imgs_subset = rearrange(
+                        imgs_subset, 'b v n c t h w -> (b v n t) c h w'
+                    ).contiguous()  # [D x B x V x N x T, C, H, W]
+                    f = super().extract_feat(imgs_subset)
+                    if consensus:
+                        f = reduce(f, '(b v n t) cl hl wl -> b v cl', 'mean', v=V, n=N_, t=T_)
+                    else:
+                        f = reduce(f, '(b v n t) cl hl wl -> b v n t cl', 'mean', v=V, n=N_, t=T_)
+                elif self.dim == '3d':
+                    imgs_subset = rearrange(
+                        imgs_subset, 'b v n c t h w -> (b v) c (n t) h w'
+                    ).contiguous()  # [D x B x V x N x T, C, H, W]
+                    f = super().extract_feat(imgs_subset)
+                    if consensus:
+                        f = reduce(f, '(b v) cl nt hl wl -> b v cl', 'mean', v=V)
+                    else:
+                        f = reduce(f, '(b v) cl nt hl wl -> b v nt cl', 'mean', v=V)
+
                 f_tally.append(f)
             f_tallies.append(f_tally)
         return f_tallies

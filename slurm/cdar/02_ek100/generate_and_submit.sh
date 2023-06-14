@@ -6,8 +6,8 @@ echo "$template_file"
 
 idx=0
 
-for target in P02 P04 P22; do
-    for source_ in P02 P04 P22; do
+for target in D1 D2 D3; do
+    for source_ in D1 D2 D3; do
         if [ $source_ == $target ]; then
             continue
         fi

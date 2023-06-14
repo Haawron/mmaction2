@@ -28,7 +28,7 @@ class BaseDARecognizer(BaseRecognizer):
         labels = torch.cat([labels_source[indices], labels_target[indices]]).to(device)
         # domains = domains[indices]  # no need to shuffle
 
-        losses = self(imgs, labels, domains, return_loss=True, **kwargs)
+        losses = self(imgs, labels, domains=domains, return_loss=True, **kwargs)
 
         loss, log_vars = self._parse_losses(losses)
 
@@ -49,7 +49,7 @@ class BaseDARecognizer(BaseRecognizer):
                 raise ValueError('Label should not be None.')
             if self.blending is not None:
                 imgs, label = self.blending(imgs, label)
-            return self.forward_train(imgs, label, domains, **kwargs)
+            return self.forward_train(imgs, label, domains=domains, **kwargs)
         return self.forward_test(imgs, domains, **kwargs)
 
     def forward_neck(self, outs, labels, domains=None, **kwargs):

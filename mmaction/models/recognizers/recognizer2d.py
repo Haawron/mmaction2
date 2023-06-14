@@ -196,6 +196,7 @@ class DARecognizer2D(Recognizer2D):
                  backbone=None,
                  cls_head=None,
                  neck=None,
+                 samplings=dict(source='dense', target='dense'),
                  contrastive=False,
                  train_cfg=None,
                  test_cfg=None):
@@ -204,6 +205,7 @@ class DARecognizer2D(Recognizer2D):
                         neck=neck,
                         train_cfg=train_cfg,
                         test_cfg=test_cfg)
+        self.samplings = samplings
         self.contrastive = contrastive
 
     def _reshape_inputs(self, imgs, labels, domains):
@@ -229,7 +231,11 @@ class DARecognizer2D(Recognizer2D):
 
     def forward_train(self, imgs, labels, domains, **kwargs):
         assert self.with_cls_head
-        imgs, labels, domains = self._reshape_inputs(imgs, labels, domains)
+        if isinstance(imgs, list):
+            imgs[0], _, _ = self._reshape_inputs(imgs[0], labels, domains)
+            imgs[1], labels, domains = self._reshape_inputs(imgs[1], labels, domains)
+        else:
+            imgs, labels, domains = self._reshape_inputs(imgs, labels, domains)
 
         losses = dict()
 
@@ -277,19 +283,35 @@ class DARecognizer2D(Recognizer2D):
             domains = torch.ones_like(imgs)
         else:
             imgs_source, imgs_target = data_batches[0]['imgs'], data_batches[1]['imgs']
-            if imgs_source.shape != imgs_target.shape:
-                imgs_target = rearrange(imgs_target, 'b n c t h w -> b t c n h w')
-            imgs = torch.concat([imgs_source, imgs_target])
+            B = imgs_source.shape[0]
+            # if self.samplings['source'] == 'uniform':
+            #     imgs_source = rearrange(imgs_source, 'b n c t h w -> b t c n h w').contiguous()
+            # if self.samplings['target'] == 'uniform':
+            #     imgs_target = rearrange(imgs_target, 'b n c t h w -> b t c n h w').contiguous()
+            imgs = [imgs_source, imgs_target]
+            if imgs_source.shape == imgs_target.shape:
+                imgs = torch.concat(imgs)
             labels = torch.concat([data_batch['label'] for data_batch in data_batches])
             domains = np.array([
                 [domain]*data_batch['imgs'].shape[0] for domain, data_batch in zip(domains, data_batches)
             ]).reshape(-1)
 
         if not self.contrastive:  # shuffle the batch
-            indices = torch.randperm(imgs.shape[0])
-            imgs = imgs[indices]
-            labels = labels[indices].to(imgs.device)
-            domains = domains[indices]
+            if isinstance(imgs, list):
+                indices_source = torch.randperm(B)
+                indices_target = torch.randperm(B)
+                imgs = [
+                    imgs[0][indices_source],
+                    imgs[1][indices_target]
+                ]
+                labels = torch.concat([
+                    labels[:B][indices_source],
+                    labels[B:][indices_target]]).to(imgs[0].device)
+            else:
+                indices = torch.randperm(2*B)
+                imgs = imgs[indices]
+                labels = labels[indices].to(imgs.device)
+                domains = domains[indices]
 
         losses = self(imgs, labels, domains, return_loss=True, **kwargs)
 
@@ -298,7 +320,7 @@ class DARecognizer2D(Recognizer2D):
         outputs = dict(
             loss=loss,
             log_vars=log_vars,
-            num_samples=imgs.shape[0])
+            num_samples=2*B)
 
         return outputs
 

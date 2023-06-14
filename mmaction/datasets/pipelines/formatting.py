@@ -5,6 +5,7 @@ import mmcv
 import numpy as np
 import torch
 from mmcv.parallel import DataContainer as DC
+from einops import rearrange
 
 from ..builder import PIPELINES
 
@@ -266,7 +267,7 @@ class FormatShape:
     def __init__(self, input_format, collapse=False):
         self.input_format = input_format
         self.collapse = collapse
-        if self.input_format not in ['NCTHW', 'NCHW', 'NCHW_Flow', 'NPTCHW']:
+        if self.input_format not in ['NCTHW', 'TCNHW', 'NCHW', 'NCHW_Flow', 'NPTCHW']:
             raise ValueError(
                 f'The input format {self.input_format} is invalid.')
 
@@ -296,6 +297,13 @@ class FormatShape:
             imgs = imgs.reshape((-1, ) + imgs.shape[2:])
             # M' x C x L x H x W
             # M' = N_crops x N_clips
+        elif self.input_format == 'TCNHW':  # for uniform sampling
+            num_clips = results['num_clips']
+            clip_len = results['clip_len']
+            imgs = rearrange(
+                imgs, '(crops n t) h w c -> (crops t) c n h w',
+                n=num_clips, t=clip_len)
+
         elif self.input_format == 'NCHW':
             imgs = np.transpose(imgs, (0, 3, 1, 2))
             # M x C x H x W

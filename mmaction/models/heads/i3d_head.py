@@ -1,4 +1,5 @@
 # Copyright (c) OpenMMLab. All rights reserved.
+import torch
 import torch.nn as nn
 from mmcv.cnn import normal_init
 
@@ -51,7 +52,7 @@ class I3DHead(BaseHead):
         """Initiate the parameters from scratch."""
         normal_init(self.fc_cls, std=self.init_std)
 
-    def forward(self, x):
+    def forward(self, x, **kwargs):
         """Defines the computation performed at every call.
 
         Args:
@@ -72,3 +73,23 @@ class I3DHead(BaseHead):
         cls_score = self.fc_cls(x)
         # [N, num_classes]
         return cls_score
+
+    def loss(self, cls_score, labels, domains=None, train=False, **kwargs):
+        losses = {}
+        if domains is not None:
+            source_idx = domains == 'source'
+            target_idx = ~source_idx
+            mca_source = self.calc_mca(cls_score[source_idx].detach(), labels[source_idx])
+            mca_target = self.calc_mca(cls_score[target_idx], labels[target_idx])
+            losses['s_mca'] = mca_source
+            losses['t_mca'] = mca_target
+        else:
+            mca = self.calc_mca(cls_score, labels)
+            losses = {'mca': mca}
+
+        loss_cls = self.loss_cls(cls_score, labels, domains=domains, **kwargs)
+        if isinstance(loss_cls, dict):
+            losses.update(loss_cls)
+        else:
+            losses['loss_cls'] = loss_cls
+        return losses

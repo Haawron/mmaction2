@@ -271,6 +271,34 @@ class SampleFrames:
         return repr_str
 
 
+@PIPELINES.register_module()
+class MultiScaleSampleFrames:
+    def __init__(self,
+        num_clips_local=2,
+        num_clips_global=1,
+        clip_len=32,
+        test_mode=False,
+        **kwargs
+    ):
+        assert 'num_clips' not in kwargs
+        self.num_clips_local = num_clips_local
+        self.num_clips_global = num_clips_global
+        self.test_mode = test_mode
+        self.local_sampler = SampleFrames(
+            clip_len=clip_len,
+            num_clips=self.num_clips_local,
+            test_mode=self.test_mode,
+            **kwargs)
+        self.global_sampler = SampleFrames(
+            clip_len=self.num_clips_global,
+            num_clips=clip_len,
+            test_mode=self.test_mode,
+            **kwargs)
+
+    def __call__(self, results):
+        results
+
+
 # https://github.com/xudejing/video-clip-order-prediction/blob/7a1710d3debd66a328e2395676fecd18ecdebeae/datasets/ucf101.py#L190
 @PIPELINES.register_module()
 class COPSampleFrames(SampleFrames):
