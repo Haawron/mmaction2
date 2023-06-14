@@ -19,9 +19,10 @@ model = dict(
 dataset_type = 'RawframeDataset'
 data_root = '/local_datasets/kinetics400/rawframes_resized/train'
 data_root_val = '/local_datasets/kinetics400/rawframes_resized/val'
+data_root_test = '/local_datasets/babel'
 ann_file_train = 'data/_filelists/k400/processed/filelist_k400_train_closed.txt'
 ann_file_val = 'data/_filelists/k400/processed/filelist_k400_val_closed.txt'
-ann_file_test = 'data/_filelists/k400/processed/filelist_k400_test_closed.txt'
+ann_file_test = 'data/_filelists/babel/processed/filelist_babel_test_closed.txt'
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_bgr=False)
 train_pipeline = [

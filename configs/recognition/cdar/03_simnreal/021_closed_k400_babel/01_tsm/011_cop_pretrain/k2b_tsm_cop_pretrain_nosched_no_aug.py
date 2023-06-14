@@ -40,7 +40,10 @@ datasets = dict(
         start_index=1,
     ),
     K400=dict(
-        type='VideoDataset',
+        # type='VideoDataset',
+        type='RawframeDataset',
+        filename_tmpl='img_{:05d}.jpg',
+        start_index=0,  # denseflow로 푼 건 0부터 시작하고 opencv로 푼 건 1부터 시작함
     ),
 )
 
@@ -48,13 +51,13 @@ dataset_settings = dict(
     source=dict(
         train=dict(
             **datasets['K400'],
-            data_prefix='/local_datasets/kinetics400/videos/train',
+            data_prefix='/local_datasets/kinetics400/rawframes_resized/train',
             ann_file='data/_filelists/k400/processed/filelist_k400_train_closed.txt'),
-        test=dict(
+        valid=dict(
             **datasets['K400'],
             test_mode=True,
-            data_prefix='/local_datasets/kinetics400/videos/train',
-            ann_file='data/_filelists/k400/processed/filelist_k400_train_closed.txt')),
+            data_prefix='/local_datasets/kinetics400/rawframes_resized/val',
+            ann_file='data/_filelists/k400/processed/filelist_k400_val_closed.txt')),
     target=dict(
         train=dict(
             **datasets['BABEL'],
@@ -64,12 +67,12 @@ dataset_settings = dict(
             **datasets['BABEL'],
             test_mode=True,
             data_prefix='/local_datasets/babel',
-            ann_file='data/_filelists/babel/processed/filelist_babel_test_merged_closed.txt'),
+            ann_file='data/_filelists/babel/processed/filelist_babel_val_closed.txt'),
         test=dict(
             **datasets['BABEL'],
             test_mode=True,
             data_prefix='/local_datasets/babel',
-            ann_file='data/_filelists/babel/processed/filelist_babel_train_closed.txt')))
+            ann_file='data/_filelists/babel/processed/filelist_babel_test_closed.txt')))
 
 img_norm_cfg = dict(
     mean=[127.5, 127.5, 127.5], std=[127.5, 127.5, 127.5], to_bgr=False)
@@ -77,10 +80,8 @@ img_norm_cfg = dict(
 pipelines = dict(
     source=dict(
         train=[
-            dict(type='DecordInit'),
-            # dict(type='COPSampleFrames', clip_len=8, num_clips=3, clip_interval=16),
             dict(type='SampleFrames', clip_len=8, frame_interval=2, num_clips=3),
-            dict(type='DecordDecode'),
+            dict(type='RawFrameDecode'),
 
             dict(type='Resize', scale=(224, 224), keep_ratio=False),
 
@@ -92,7 +93,6 @@ pipelines = dict(
     ),
     target=dict(
         train=[
-            # dict(type='COPSampleFrames', clip_len=8, num_clips=3, clip_interval=1),
             dict(type='SampleFrames', clip_len=8, frame_interval=1, num_clips=3),
             dict(type='RawFrameDecode'),
 
@@ -159,7 +159,7 @@ optimizer_config = dict(
 
 # learning policy
 total_epochs = 500
-lr_config = dict(policy='step', step=[int(total_epochs*.8)])
+lr_config = dict(policy='step', step=[])
 work_dir = './work_dirs/train_output/hello/cdar/tsm'
 load_from = 'https://download.openmmlab.com/mmaction/recognition/tsm/tsm_r50_1x1x8_100e_kinetics400_rgb/tsm_r50_1x1x8_100e_kinetics400_rgb_20210701-7ff22268.pth'
 ckpt_revise_keys = []#[('cls_head', 'unusedhead')]

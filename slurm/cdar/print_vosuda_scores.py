@@ -33,18 +33,27 @@ print_args = [
 def get_args():
     parser = argparse.ArgumentParser('VOSUDA_REPORT')
     parser.add_argument('-p', '--path', action='store_true')
-    parser.add_argument('-v', '--valid', action='store_true')
+    parser.add_argument('-v', '--valid', action='store_true', help='Show validation scores rather than test scores')
     parser.add_argument('-sh', '--show-hidden', action='store_true')
+    parser.add_argument('-P', '--parsable', action='store_true', help='Print the tables in parsable mode')
     args = parser.parse_args()
     return args
 
 
 class VOSUDAReport:
-    def __init__(self, print_path:bool=False, valid_score_instead_of_test:bool=False, show_hidden=False):
+    def __init__(self,
+            print_path:bool=False,
+            valid_score_instead_of_test:bool=False,
+            show_hidden=False,
+            parsable=False,
+    ):
         self.print_path = print_path
         self.valid_score_instead_of_test = valid_score_instead_of_test
         self.show_hidden = show_hidden
-        self.p_root = Path(f'/data/{"gunsbrother" if "ariel" in socket.gethostname() else "gunsbrother"}/repos/haawron_mmaction2/work_dirs/train_output/cdar')
+        username = 'gunsbrother' if any(
+            [seraph_hostname in socket.gethostname() for seraph_hostname in ['ariel', 'moana', 'aurora']]
+            ) else 'hyogun'
+        self.p_root = Path(f"/data/{username}/repos/haawron_mmaction2/work_dirs/train_output/cdar/")
         self.p_valid_jobs = self.get_valid_job_dirs(self.p_root)
         job_dicts, orders = self.get_job_dicts_from_job_dirs(self.p_valid_jobs)
 
@@ -76,7 +85,10 @@ class VOSUDAReport:
                 df_stats['best'] = df_subtask.max(axis=1)
                 df_stats['avg'] = df_subtask.mean(axis=1)
                 df_stats['std'] = df_subtask.std(axis=1)
-                df_subtask = pd.concat([df_blank, df_subtask, df_blank, df_stats], axis=1)
+                if parsable:
+                    df_subtask = pd.concat([df_subtask, df_stats], axis=1)
+                else:
+                    df_subtask = pd.concat([df_blank, df_subtask, df_blank, df_stats], axis=1)
                 jids = df_subtask.index.get_level_values('jid')
                 if self.print_path:
                     df_paths = df_jobs.groupby('jid').head(1)[['path', 'jid']].set_index('jid').to_dict('series')['path']

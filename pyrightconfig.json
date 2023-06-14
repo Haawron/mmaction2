@@ -7,6 +7,7 @@
         "**/__pycache__/",
         "data/",
         "work_dirs/",
+        "mmaction/.mim/",
         "mmaction2.egg-info/",
         "slurm/logs/",
         "failure_modes_visualized/",

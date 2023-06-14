@@ -1,13 +1,13 @@
 #!/bin/bash
 
 #SBATCH -J closed_k2b-tsm-cop_pretrain-phase0-no_sched_no_aug
-#SBATCH -p batch
+#SBATCH -p batch_grad
 #SBATCH --gres=gpu:8
-#SBATCH --cpus-per-gpu=12
-#SBATCH --mem-per-gpu=25G
+#SBATCH --cpus-per-gpu=8
+#SBATCH --mem-per-gpu=29G
 #SBATCH -t 4-0
-#SBATCH -x vll[1-2],augi[1-2],agi[1-2]
-#SBATCH --array 0
+#SBATCH -x ariel-v[1-13]
+#SBATCH --array 0-3%2
 #SBATCH -o slurm/logs/slurm-%A_%a-%x.out
 
 current_time=$(date +'%Y%m%d-%H%M%S')
@@ -33,15 +33,17 @@ lr=1e-3
 config='configs/recognition/cdar/03_simnreal/021_closed_k400_babel/01_tsm/011_cop_pretrain/k2b_tsm_cop_pretrain_nosched_no_aug.py'
 
 N=$SLURM_GPUS_ON_NODE
+calibed_lr="$(perl -le "print $lr * $N / 4")"
 OMP_NUM_THREADS=${N} MKL_NUM_THREADS=${N} torchrun --nproc_per_node="${N}" --master_port=$((10000+RANDOM%20000)) tools/train.py "$config" \
     --launcher pytorch \
     --work-dir "$workdir" \
     --cfg-options \
-        optimizer.lr="$lr" log_config.interval=20 total_epochs=1000
+        optimizer.lr="$calibed_lr" \
+        log_config.interval=20 total_epochs=1000
 
-# shellcheck source=../../../_extract_backbone_tsm.sh
-source slurm/cdar/03_simnreal/_extract_backbone_tsm.sh
-# shellcheck source=../../../_tsne.sh
-source slurm/cdar/03_simnreal/_tsne.sh
-source /data/hyogun/send_slack_message_mmaction.sh
+# # shellcheck source=../../../_extract_backbone_tsm.sh
+# source slurm/cdar/03_simnreal/_extract_backbone_tsm.sh
+# # shellcheck source=../../../_tsne.sh
+# source slurm/cdar/03_simnreal/_tsne.sh
+# source /data/hyogun/send_slack_message_mmaction.sh
 exit 0

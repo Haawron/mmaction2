@@ -186,8 +186,14 @@ def main():
 
     if cfg.omnisource or cfg.domain_adaptation:
         # If omnisource flag is set, cfg.data.train should be a list
-        assert isinstance(cfg.data.train, list)
-        datasets = [build_dataset(dataset) for dataset in cfg.data.train]
+        if isinstance(cfg.data.train, list):
+            datasets = [build_dataset(dataset) for dataset in cfg.data.train]
+        elif isinstance(cfg.data.train, dict):
+            assert 'source' in cfg.data.train and 'target' in cfg.data.train
+            datasets = [
+                build_dataset(cfg.data.train['source']),
+                build_dataset(cfg.data.train['target']),
+            ]
     else:
         datasets = [build_dataset(cfg.data.train)]
 
