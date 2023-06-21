@@ -1,0 +1,28 @@
+0 jump high_jump long_jump
+1 run jogging running_on_treadmill
+2 throw throwing_ball javelin_throw throwing_axe
+3 kick drop_kicking kicking_field_goal kicking_soccer_ball
+4 bend bending_back
+5 dance tap_dancing swing_dancing tango_dancing dancing_macarena
+6 clean_something cleaning_windows cleaning_floor cleaning_pool cleaning_toilet
+7 squat squat
+8 punch slapping punching_bag punching_person_(boxing)
+9 crawl crawling_baby
+10 clap clapping applauding
+11 pick_up front_raises deadlifting
+
+12 driving_car
+13 digging
+14 climbing_a_rope
+15 cutting_watermelon
+16 golf_driving
+17 pushing_car
+18 singing
+19 unboxing
+20 waxing_legs
+21 smoking
+22 sniffing
+23 push_up
+24 kitesurfing
+25 fixing_hair
+26 balloon_blowing
