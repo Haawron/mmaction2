@@ -1,0 +1,21 @@
+0 jump high_jump long_jump
+1 run jogging running_on_treadmill
+2 throw throwing_ball javelin_throw throwing_axe
+3 kick drop_kicking kicking_field_goal kicking_soccer_ball
+4 bend bending_back
+5 dance tap_dancing swing_dancing tango_dancing dancing_macarena
+6 clean_something cleaning_windows cleaning_floor cleaning_pool cleaning_toilet
+7 squat squat
+8 punch slapping punching_bag punching_person_(boxing)
+9 crawl crawling_baby
+10 clap clapping applauding
+11 pick_up front_raises deadlifting
+
+12 walk
+13 turn
+14 step
+15 sit down
+16 stand up
+17 wave
+18 place
+19 catch
