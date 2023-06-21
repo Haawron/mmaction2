@@ -2,7 +2,7 @@
 
 template_file=${1:-'slurm/cdar/02_ek100/02_timesformer/template/tsf-warmup.sh.j2'}
 
-echo "$template_file"
+echo "$template_file $jid"
 
 idx=0
 

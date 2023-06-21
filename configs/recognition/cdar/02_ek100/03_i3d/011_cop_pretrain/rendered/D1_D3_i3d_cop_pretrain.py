@@ -76,7 +76,7 @@ pipelines = dict(
 
 data = dict(
     videos_per_gpu=18,
-    workers_per_gpu=8,
+    workers_per_gpu=6,
     train=[
         dict(
             **dataset_settings,

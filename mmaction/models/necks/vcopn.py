@@ -20,7 +20,9 @@ class VCOPN(nn.Module):
         num_clips,
         backbone='TimeSformer',  # TSM or TimeSformer
         contrastive=False,
+        dropout_ratio=.5,
         init_std=0.001,
+        loss_weight=1.,
         num_segments=None,  # Only for TSM
     ):
         """
@@ -33,7 +35,9 @@ class VCOPN(nn.Module):
         self.num_clips = num_clips
         self.backbone = backbone
         assert self.backbone in ['TSM', 'TimeSformer']
+        self.loss_weight = loss_weight
         self.num_segments = num_segments
+        self.dropout_ratio = dropout_ratio
         self.init_std = init_std
         self.contrastive = contrastive
         self.num_possible_permutations = math.factorial(num_clips)  # N!
@@ -42,7 +46,7 @@ class VCOPN(nn.Module):
         pair_num = int(num_clips*(num_clips-1)/2)
         self.fc_cop2 = nn.Linear(512*pair_num, self.num_possible_permutations)
 
-        self.dropout = nn.Dropout(p=0.5)
+        self.dropout = nn.Dropout(p=self.dropout_ratio)
         self.relu = nn.ReLU(inplace=True)
 
         self.ce = torch.nn.CrossEntropyLoss()
@@ -88,24 +92,59 @@ class VCOPN(nn.Module):
         h = self.dropout(h)
         h = self.fc_cop2(h)  # logits, [2B, N!]
 
-        cop_mca_source, cop_mca_target = self.calc_mca(h, cop_labels, domains)
-        loss_cop = self.ce(h, cop_labels)
-        losses = {'cop_mca_source': cop_mca_source, 'cop_mca_target': cop_mca_target, 'loss_cop': loss_cop}
+        loss_cop = self.loss_weight * self.ce(h, cop_labels)
+        if domains is not None:
+            cop_mca_source, cop_mca_target = self.calc_mca(h, cop_labels, domains)
+            losses = {'cop_mca_source': cop_mca_source, 'cop_mca_target': cop_mca_target, 'loss_cop': loss_cop}
+        else:
+            cop_mca = self.calc_mca(h, cop_labels)
+            losses = {'cop_mca': cop_mca, 'loss_cop': loss_cop}
         return f_out, losses
 
-    def calc_mca(self, cls_score, labels, domains):
-        source_idx = domains == 'source'
-        target_idx = ~source_idx
-        mca_source = mean_class_accuracy(
-            cls_score[source_idx].detach().cpu().numpy(),
-            labels[source_idx].detach().cpu().numpy()
-        )
-        mca_target = mean_class_accuracy(
-            cls_score[target_idx].detach().cpu().numpy(),
-            labels[target_idx].detach().cpu().numpy()
-        )
-        scores = (
-            torch.tensor(mca_source, device=cls_score.device),
-            torch.tensor(mca_target, device=cls_score.device),
-        )
-        return scores
+    def calc_mca(self, cls_score, labels, domains=None):
+        if domains is not None:  # DA setting
+            source_idx = domains == 'source'
+            target_idx = ~source_idx
+            mca_source = mean_class_accuracy(
+                cls_score[source_idx].detach().cpu().numpy(),
+                labels[source_idx].detach().cpu().numpy()
+            )
+            mca_target = mean_class_accuracy(
+                cls_score[target_idx].detach().cpu().numpy(),
+                labels[target_idx].detach().cpu().numpy()
+            )
+            scores = (
+                torch.tensor(mca_source, device=cls_score.device),
+                torch.tensor(mca_target, device=cls_score.device),
+            )
+            return scores
+        else:  # single domain
+            score = mean_class_accuracy(
+                cls_score.detach().cpu().numpy(),
+                labels.detach().cpu().numpy()
+            )
+            return torch.tensor(score, device=cls_score.device)
+
+
+@NECKS.register_module()
+class VCOPN4GLA(VCOPN):
+    def forward(self, f_tallies, labels=None, domains=None, train=False, **kwargs):
+        if not train:
+            return f_tallies, None
+
+        """f_tallies: [[source_local, source_global], [target_local, target_global]]"""
+        # if f_tallies[0] is not None and f_tallies[1] is not None:
+        #     f_locals = torch.cat([f_tallies[0][0], f_tallies[1][0]])
+        # else:
+        #     if f_tallies[0] is not None:
+        #         f_locals = f_tallies[0][0]
+        #     else:
+        if isinstance(f_tallies[0], torch.Tensor) or isinstance(f_tallies[1], torch.Tensor):  # single domain
+            f_locals = f_tallies[0]
+            if f_locals.dim() == 4:  # [B, V, NT/8, C_l]
+                f_locals = f_locals.mean(dim=2)
+        else:
+            f_locals = torch.cat([f_tallies[0][0], f_tallies[1][0]])
+        f_locals = rearrange(f_locals, 'bb n c -> (bb n) c', n=self.num_clips).contiguous()  # [2B x N, n_feat]
+        _, loss = super().forward(f_locals, labels=labels, domains=domains, train=train, **kwargs)
+        return f_tallies, loss

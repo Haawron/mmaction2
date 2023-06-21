@@ -81,6 +81,17 @@ class FrameSampler:
 
         return imgs_locals, imgs_globals
 
+    @staticmethod
+    def just_split(imgs, index_dict=dict()):
+        """
+        imgs: [D x B, V, C, T, H, W]
+            note: V indicates the number of clips implying that V clips are already resampled from N clips
+        """
+        num_locals, num_globals = index_dict.get('l', 0), index_dict.get('g', 0)
+        assert num_locals > 0 or num_globals > 0
+        imgs_locals, imgs_globals = imgs[:,:num_locals], imgs[:,num_locals:]
+        return imgs_locals.unsqueeze(2), imgs_globals.unsqueeze(2)  # to fit to legacy dim `N`
+
 
 @RECOGNIZERS.register_module()
 class TemporallyPyramidicRecognizer(BaseRecognizer):
@@ -143,7 +154,8 @@ class TemporallyPyramidicRecognizer(BaseRecognizer):
             vertebrae = [vertebrae]
         for vertebra in vertebrae:
             outs, loss_aux = vertebra(outs, labels, **kwargs)
-            losses_aux.update(loss_aux)
+            if loss_aux is not None:
+                losses_aux.update(loss_aux)
         return outs, losses_aux
 
     # test methods
@@ -166,7 +178,7 @@ class TemporallyPyramidicRecognizer(BaseRecognizer):
         f_tally = self.extract_feat(imgs_tally)  # [[B, V, NT, C_l], ...]
 
         if self.with_neck:
-            outs, _ = self.forward_neck(outs, None)
+            f_tally, _ = self.forward_neck(f_tally, None)
 
         if self.feature_extraction:
             return reduce(f, 'b vv nt c_l -> b c_l', 'mean')
@@ -307,23 +319,33 @@ class TemporallyPyramidicDARecognizer(BaseDARecognizer):
 
     def _do_test(self, imgs, domains=None, **kwargs):
         imgs = self.sampler(imgs)  # [B, N, C, T, H, W] -> [B, V, N', C, T', H, W]
-        f_tallies = self.extract_feat([imgs], consensus=True)  # assumed single domain
+        f_tally = self.extract_feat([imgs], consensus=True)[0]  # assumed single domain
 
         if self.with_neck:
-            f_tallies, _ = self.forward_neck(f_tallies, None, domains, **kwargs)
-
-        outs = temporal_locality_fuse(
-            f_tallies,  # [[B, V, C_l], ...]
-            temporal_locality='both',
-            fusion_method='mean'
-        )  # [2 x B. C_l]
+            f_tally, _ = self.forward_neck(f_tally, None, domains, **kwargs)
 
         if self.feature_extraction:
+            outs = temporal_locality_fuse(
+                f_tally,  # [[B, V, C_l], ...]
+                temporal_locality='both',
+                fusion_method='mean'
+            )  # [2 x B, C_l]
             # outs = reduce(outs, '(b n t) c h w -> b c', 'mean', b=B, n=N, t=T)  # [2B x N x T, C, H, W]
             return outs
 
+        f_local, f_global = f_tally  # [B, V1, C_l], [B, V2, C_l]
+        V_local = f_local.shape[1]
+        subclip_size = 3
+        outs = []
+        for v in list(range(subclip_size, V_local+1, subclip_size)) + ([V_local] if V_local % subclip_size != 0 else []):
+            out = torch.cat([f_local[:,v-subclip_size:v], f_global], dim=1).mean(dim=1)  # [B, C_L]
+            outs.append(out)
+        num_subclips = len(outs)
+        outs = rearrange(torch.stack(outs), 'vv b c_l -> (b vv) c_l')  # [B x ceil(V1/3), C_l]
+
         # should have cls_head if not extracting features
-        cls_score = self.cls_head(outs)
+        cls_score = self.cls_head(outs)  # [B x ceil(V1/3), K]
+        cls_score = self.average_clip(cls_score, num_segs=num_subclips)  # [B, K]
         return cls_score
 
     def resample(self, imgs_from_domains):
@@ -345,7 +367,7 @@ class TemporallyPyramidicDARecognizer(BaseDARecognizer):
             for imgs_subset, locality in zip(imgs, ['local', 'global']):
                 if imgs_subset is None:
                     continue
-                _, V, N_, _, T_, _, _ = imgs_subset.shape  # [B, V, N', C_l, T', H_l, W_l], V, N, T would be diff from original after resampling
+                _, V, N_, _, T_, _, _ = imgs_subset.shape  # [B, V, N', C, T', H_l, W_l], V, N, T would be diff from original after resampling
                 # TODO: replace this block in more reasonable logic
                 if self.dim == '2d':
                     imgs_subset = rearrange(

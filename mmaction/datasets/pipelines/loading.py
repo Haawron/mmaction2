@@ -274,29 +274,67 @@ class SampleFrames:
 @PIPELINES.register_module()
 class MultiScaleSampleFrames:
     def __init__(self,
-        num_clips_local=2,
-        num_clips_global=1,
-        clip_len=32,
+        num_locals=2,
+        num_globals=1,
+        # options for both
+        clip_len=8,
         test_mode=False,
+        # options for local
+        frame_interval_local=2,
+        # options for global
+        dense_sampling=False,
+        frame_interval_global=32,
+        # others
         **kwargs
     ):
         assert 'num_clips' not in kwargs
-        self.num_clips_local = num_clips_local
-        self.num_clips_global = num_clips_global
+        self.num_locals = num_locals
+        self.num_globals = num_globals
+        self.clip_len = clip_len
+        self.frame_interval_local = frame_interval_local
+        self.dense_sampling = dense_sampling
+        self.frame_interval_global= frame_interval_global
         self.test_mode = test_mode
         self.local_sampler = SampleFrames(
-            clip_len=clip_len,
-            num_clips=self.num_clips_local,
+            clip_len=self.clip_len,
+            num_clips=self.num_locals,
+            frame_interval=self.frame_interval_local,
             test_mode=self.test_mode,
             **kwargs)
-        self.global_sampler = SampleFrames(
-            clip_len=self.num_clips_global,
-            num_clips=clip_len,
-            test_mode=self.test_mode,
-            **kwargs)
+        if self.dense_sampling:
+            self.global_sampler = SampleFrames(
+                clip_len=self.clip_len,
+                num_clips=1,
+                frame_interval=self.frame_interval_global,
+                test_mode=self.test_mode,
+                **kwargs)
+        else:  # uniform sampling
+            self.global_sampler = SampleFrames(
+                clip_len=self.num_globals,
+                num_clips=self.clip_len,
+                test_mode=self.test_mode,
+                **kwargs)
 
     def __call__(self, results):
-        results
+        results_local:dict  = self.local_sampler(results).copy()
+        if self.dense_sampling:
+            frame_inds_list = []
+            for _ in range(self.num_globals):
+                results_global:dict = self.global_sampler(results).copy()
+                frame_inds = results_global['frame_inds'].T
+                frame_inds_list.append(frame_inds)
+            results_global['frame_inds'] = np.concatenate(frame_inds_list)
+        else:
+            results_global:dict = self.global_sampler(results).copy()
+            results_global['frame_inds'] = results_global['frame_inds'].T
+
+        # used in `FormatShape` /mmaction/datasets/pipelines/formatting.py#254
+        results['frame_inds'] = np.concatenate([results_local['frame_inds'], results_global['frame_inds']])
+        results['clip_len'] = self.clip_len
+        results['frame_interval'] = 'varies'
+        results['num_clips'] = self.num_locals + self.num_globals
+        results['num_locals'], results['num_globals'] = self.num_locals, self.num_globals
+        return results
 
 
 # https://github.com/xudejing/video-clip-order-prediction/blob/7a1710d3debd66a328e2395676fecd18ecdebeae/datasets/ucf101.py#L190

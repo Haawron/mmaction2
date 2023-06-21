@@ -99,8 +99,8 @@ data = dict(
         data_prefix=data_root_target,
         pipeline=test_pipeline))
 evaluation = dict(
-    interval=5, metrics=['top_k_accuracy', 'mean_class_accuracy', 'confusion_matrix'],
-    save_best='mean_class_accuracy')
+    interval=1, metrics=['top_k_accuracy', 'confusion_matrix'],
+    save_best='top1_acc')
 
 # runtime settings
 log_config = dict(interval=3)

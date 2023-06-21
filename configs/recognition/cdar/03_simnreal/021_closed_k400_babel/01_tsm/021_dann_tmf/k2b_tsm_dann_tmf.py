@@ -55,7 +55,9 @@ datasets = dict(
         start_index=1,
     ),
     K400=dict(
-        type='VideoDataset',
+        type='RawframeDataset',
+        filename_tmpl='img_{:05d}.jpg',
+        start_index=0,
     ),
 )
 
@@ -63,12 +65,12 @@ dataset_settings = dict(
     source=dict(
         train=dict(
             **datasets['K400'],
-            data_prefix='/local_datasets/kinetics400/videos/train',
+            data_prefix='/local_datasets/kinetics400/rawframes_resized/train',
             ann_file='data/_filelists/k400/processed/filelist_k400_train_closed.txt'),
         test=dict(
             **datasets['K400'],
             test_mode=True,
-            data_prefix='/local_datasets/kinetics400/videos/val',
+            data_prefix='/local_datasets/kinetics400/rawframes_resized/val',
             ann_file='data/_filelists/k400/processed/filelist_k400_test_closed.txt')),
     target=dict(
         train=dict(
@@ -108,24 +110,13 @@ blend_options = dict(
 pipelines = dict(
     source=dict(
         train=[
-            dict(type='DecordInit'),
             dict(type='SampleFrames', clip_len=8, frame_interval=32, num_clips=1),
-            dict(type='DecordDecode'),
-
-            # /data/hyogun/repos/haawron_mmaction2/work_dirs/train_output/hmdb2ucf/tsm/gcd4da/median/phase0/default/7928__gcd4da-phase0-tsm_hmdb2ucf-from-vanilla/3/20220902-003929/20220902_003941.log
+            dict(type='RawFrameDecode'),
             dict(type='Resize', scale=(-1, 256)),
-            dict(
-                type='MultiScaleCrop',
-                input_size=224,
-                scales=(1, 0.875, 0.66),
-                random_crop=False,
-                max_wh_scale_gap=1,
-                num_fixed_crops=13),
-            dict(type='Resize', scale=(224, 224), keep_ratio=False),
+
             dict(type='RandomCrop', size=224),
             dict(type='Flip', flip_ratio=0.5),
             dict(type='BackgroundBlend', **blend_options),
-            dict(type='ColorJitter'),
 
             dict(type='Normalize', **img_norm_cfg),
             dict(type='FormatShape', input_format='NCTHW'),
@@ -135,24 +126,15 @@ pipelines = dict(
     ),
     target=dict(
         train=[
-            dict(type='SampleFrames', clip_len=1, frame_interval=1, num_clips=8),
+            dict(type='SampleFrames', clip_len=1, frame_interval=1, num_clips=8, test_mode=True),
             dict(type='RawFrameDecode'),
-
             dict(type='Resize', scale=(-1, 256)),
-            dict(
-                type='MultiScaleCrop',
-                input_size=224,
-                scales=(1, 0.875, 0.66),
-                random_crop=False,
-                max_wh_scale_gap=1,
-                num_fixed_crops=13),
-            dict(type='Resize', scale=(224, 224), keep_ratio=False),
+
             dict(type='RandomCrop', size=224),
             dict(type='Flip', flip_ratio=0.5),
-            dict(type='ColorJitter'),
 
             dict(type='Normalize', **img_norm_cfg),
-            dict(type='FormatShape', input_format='NCTHW'),
+            dict(type='FormatShape', input_format='TCNHW'),
             dict(type='Collect', keys=['imgs', 'label'], meta_keys=[]),
             dict(type='ToTensor', keys=['imgs', 'label'])
         ],
@@ -162,7 +144,7 @@ pipelines = dict(
             dict(type='Resize', scale=(-1, 256)),
             dict(type='CenterCrop', crop_size=224),
             dict(type='Normalize', **img_norm_cfg),
-            dict(type='FormatShape', input_format='NCTHW'),
+            dict(type='FormatShape', input_format='TCNHW'),
             dict(type='Collect', keys=['imgs', 'label'], meta_keys=[]),
             dict(type='ToTensor', keys=['imgs', 'label'])
         ]
@@ -214,4 +196,4 @@ optimizer_config = dict(
 lr_config = dict(policy='step', step=[5, 10])
 total_epochs = 30
 work_dir = './work_dirs/train_output/hello/cdar/tsm'
-load_from = 'work_dirs/train_output/cdar/03_simnreal/021_closed_k400_babel/01_tsm/010_source_only/tmf/default/37305__closed_k2b-tsm-tmf/0/20230414-205848/best_mean_class_accuracy_epoch_9.pth'
+load_from = ''

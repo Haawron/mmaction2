@@ -3,11 +3,11 @@ from .tpn import TPN
 from .domain_classifier import DomainClassifier
 from .osbp import OSBP
 from .linear import Linear
-from .vcopn import VCOPN
+from .vcopn import VCOPN, VCOPN4GLA
 from .norm import Norm
 from .prototypical_attention import PrototypicalAttention, ClipAttention
 
 __all__ = [
-    'TPN', 'DomainClassifier', 'Linear', 'OSBP', 'VCOPN', 'Norm',
+    'TPN', 'DomainClassifier', 'Linear', 'OSBP', 'VCOPN', 'VCOPN4GLA', 'Norm',
     'PrototypicalAttention', 'ClipAttention'
 ]

@@ -1,13 +1,13 @@
 #!/bin/bash
 
-#SBATCH -J closed_k2b-tsm-dann-tmf-cross_dcx2_from_cop
+#SBATCH -J closed_k2b-tsm-dann-tmf-dc_glx+cop
 #SBATCH -p batch_grad
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-gpu=8
 #SBATCH --mem-per-gpu=29G
 #SBATCH -t 4-0
 #SBATCH -x ariel-v[1-13]
-#SBATCH --array 0-3%1
+#SBATCH --array 0-3%2
 #SBATCH -o slurm/logs/slurm-%A_%a-%x.out
 
 current_time=$(date +'%Y%m%d-%H%M%S')
@@ -19,8 +19,8 @@ task='03_simnreal'  # table name
 subtask='021_closed_k400_babel'  # column
 backbone='01_tsm'
 model='021_dann_tmf'  # row
-add_on='locality'
-extra_setting='cross_dcx2_from_cop'  # 'default' if none
+add_on='multiscale'
+extra_setting='dc_glx+cop'  # 'default' if none
 path_experiment="${project}/${task}/${subtask}/${backbone}/${model}/${add_on}/${extra_setting}"
 
 workdir="work_dirs/train_output"

@@ -26,7 +26,12 @@ dataset_settings = dict(
         train=dict(
             **datasets['BABEL'],
             data_prefix='/local_datasets/babel',
-            ann_file='data/_filelists/babel/processed/filelist_babel_train_closed.txt')))
+            ann_file='data/_filelists/babel/processed/filelist_babel_train_closed.txt'),
+        valid=dict(
+            **datasets['BABEL'],
+            test_mode=True,
+            data_prefix='/local_datasets/babel',
+            ann_file='data/_filelists/babel/processed/filelist_babel_val_closed.txt')))
 
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_bgr=False)
@@ -70,7 +75,7 @@ pipelines = dict(
     ),
     target=dict(
         train=[
-            dict(type='SampleFrames', clip_len=8, frame_interval=2, num_clips=8, test_mode=True),
+            dict(type='SampleFrames', clip_len=8, frame_interval=2, num_clips=8),
             dict(type='RawFrameDecode'),
 
             dict(type='Resize', scale=(-1, 256)),
@@ -88,7 +93,17 @@ pipelines = dict(
             dict(type='FormatShape', input_format='NCTHW'),
             dict(type='Collect', keys=['imgs', 'label'], meta_keys=[]),
             dict(type='ToTensor', keys=['imgs', 'label'])
-        ]
+        ],
+        valid=[
+            dict(type='SampleFrames', clip_len=8, frame_interval=2, num_clips=8, test_mode=True),
+            dict(type='RawFrameDecode'),
+            dict(type='Resize', scale=(-1, 256)),
+            dict(type='CenterCrop', crop_size=224),
+            dict(type='Normalize', **img_norm_cfg),
+            dict(type='FormatShape', input_format='NCTHW'),
+            dict(type='Collect', keys=['imgs', 'label'], meta_keys=[]),
+            dict(type='ToTensor', keys=['imgs', 'label'])
+        ],
     ),
 )
 data = dict(
@@ -100,6 +115,9 @@ data = dict(
             **dataset_settings['target']['train'],
             pipeline=pipelines['target']['train']),
     ],
+    val=dict(
+        **dataset_settings['target']['valid'],
+        pipeline=pipelines['target']['valid']),
 )
 
 # learning policy

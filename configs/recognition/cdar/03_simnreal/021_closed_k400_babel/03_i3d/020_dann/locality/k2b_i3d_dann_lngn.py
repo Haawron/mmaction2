@@ -131,7 +131,7 @@ pipelines = dict(
     ),
     target=dict(
         train=[
-            dict(type='SampleFrames', clip_len=8, frame_interval=2, num_clips=8, test_mode=True),
+            dict(type='SampleFrames', clip_len=8, frame_interval=2, num_clips=8),
             dict(type='RawFrameDecode'),
 
             dict(type='Resize', scale=(-1, 256)),

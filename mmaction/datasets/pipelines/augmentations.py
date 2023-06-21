@@ -1944,7 +1944,7 @@ class BackgroundBlend:
         if self.ann_files:
             self.ann_files = list(map(Path, self.ann_files))
             assert all(ann_file.is_file() for ann_file in self.ann_files)
-        assert all(data_prefix.is_dir() for data_prefix in self.data_prefixes)
+        assert all(data_prefix.is_dir() for data_prefix in self.data_prefixes), self.data_prefixes
         assert 0 <= self.alpha <= 1 if type(self.alpha) == float else self.alpha == 'random'
 
         self.bg_paths = []

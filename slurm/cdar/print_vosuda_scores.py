@@ -22,11 +22,12 @@ dispmap = {
 }
 
 
-is_vosuda = lambda subtask: 'closed' in subtask or 'vosuda' in subtask
+is_vosuda = lambda subtask: 'closed' in subtask or 'vosuda' in subtask or 'D' in subtask
 print_args = [
     'display.precision', 1,
     'display.max_rows', None,
     'max_colwidth', None,
+    'display.float_format', '{:.1f}'.format
 ]
 
 
@@ -63,22 +64,23 @@ class VOSUDAReport:
             print(f'Task: {task}')
             print('\n')
             df_task = df_jobs[df_jobs['task']==task]
-            subtasks = df_task['subtask'].unique()
+            subtasks = sorted(df_task['subtask'].unique(), key=orders['subtask'].get)
             for j, subtask in enumerate(subtasks):
                 openness, dataset = subtask.split('_', 1)
-                metric_name = 'mean_class_accuracy' if openness == 'closed' else 'H_mean_class_accuracy'
+                metric_name = 'top1_acc' if task in ['hello', 'ek100'] else 'mean_class_accuracy' if openness == 'closed' else 'H_mean_class_accuracy'
                 print(f"Subtask: {openness.title()} {dataset.replace('_', ' → ')} ({metric_name})")
                 print()
                 df_subtask:pd.DataFrame = df_task[df_task['subtask']==subtask]
-                df_subtask = df_subtask.sort_values(by='jid')
-                df_subtask = df_subtask.sort_values(by='job_array_idx')
-                df_subtask = df_subtask.sort_values(by='model', key=lambda col: col.map(orders['model']))
-                df_subtask = df_subtask.sort_values(by='backbone', key=lambda col: col.map(orders['backbone']))
+                df_subtask = df_subtask.sort_values(by='jid', kind='stable')
+                # df_subtask = df_subtask.sort_values(by='job_array_idx')
+                df_subtask = df_subtask.sort_values(by='model', key=lambda col: col.map(orders['model']), kind='stable')
+                df_subtask = df_subtask.sort_values(by='backbone', key=lambda col: col.map(orders['backbone']), kind='stable')
                 df_subtask = df_subtask.pivot_table(
                     values=metric_name,
                     index=['backbone', 'model', 'option1', 'option2', 'jid'],
                     columns=['job_array_idx'], sort=False
                 )
+                df_subtask = df_subtask.reindex(sorted(df_subtask.columns), axis=1)
                 df_blank = pd.DataFrame(index=df_subtask.index)  # blank column for readability
                 df_blank[' '] = ' '
                 df_stats = pd.DataFrame(index=df_subtask.index)
@@ -115,6 +117,7 @@ class VOSUDAReport:
         def is_job_valid(p_job) -> bool:  # ex) p_job = 'work_dirs/train_output/cdar/03_simnreal/021_closed_k400_babel/01_tsm/010_source_only/locality/l1_3/39164__closed_k2b-tsm-l1/0/20230504-025745'
             p_log = next(p_job.glob('*.log'))
             project, task, subtask, backbone, model, option1, option2, jobname, job_array_idx, _ = p_job.parts[p_job.parts.index('train_output')+1:]
+            print('\r', Path(*p_job.parts[p_job.parts.index('haawron_mmaction2')+1:]), end='')
             # is vosuda
             if not is_vosuda(subtask):
                 return False
@@ -132,10 +135,11 @@ class VOSUDAReport:
 
         valid_job_dirs = []
         for p_best_pkl in p_root.rglob('best_pred.pkl'):
-            p_job = p_best_pkl.parent
+            p_job:Path = p_best_pkl.parent
             if not is_job_valid(p_job):
                 continue
             valid_job_dirs.append(p_job)
+        print('\r')
         return valid_job_dirs
 
     def get_job_dicts_from_job_dirs(self, p_valid_jobs:List[Path]):
